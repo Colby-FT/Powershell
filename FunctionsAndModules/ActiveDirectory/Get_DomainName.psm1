@@ -12,13 +12,18 @@ function Get-DomainName {
     Process {
         try {
             $domainName = (Get-WmiObject Win32_ComputerSystem).Domain
-            if ([string]::isnullorempty($domainName)) {
-                throw "Domain name not found."
-            }
-            return $domainName
         }
         catch {
-            Write-Error "Failed to retrieve the domain name."
+            $domainName = (Get-CimInstance Win32_ComputerSystem).Domain
         }
+        finally {
+            if ([string]::isnullorempty($domainName)) {
+                throw "Domain name not found."
+                Write-Error "Failed to retrieve the domain name."
+            }
+        }
+    }
+    End{
+        return $domainName
     }
 }
