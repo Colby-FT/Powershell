@@ -1,0 +1,42 @@
+####Set a window title and foreground color
+$uiConfig = (Get-Host).UI.RawUI
+$uiConfig.WindowTitle = "Definitely Not Something Evil"
+$uiConfig.ForegroundColor = "DarkCyan"
+#Available colors include: Black, DarkBlue, DarkGreen, DarkCyan, DarkRed, DarkMagenta, DarkYellow, Gray, DarkGray, Blue, Green, Cyan, Red, Magenta, Yellow, and White1.##
+
+
+####Show an app title on screen
+Write-Host ""
+Write-Host "===========================================================" -ForeGroundColor Cyan
+Write-Host "|                                                         |" -ForeGroundColor Cyan
+Write-Host "|             Definitely Not Something Evil               |" -ForeGroundColor Cyan
+Write-Host "|                                                         |" -ForeGroundColor Cyan
+Write-Host "|                Written By: Colby C                      |" -ForeGroundColor Cyan
+Write-Host "|                                                         |" -ForeGroundColor Cyan
+Write-Host "===========================================================" -ForeGroundColor Cyan
+Write-Host ""
+
+
+
+
+####Set a screen size
+$uiConfig = (Get-Host).UI.RawUI
+$uiConfigBufferSize = $uiConfig.BufferSize
+$uiConfigBufferSize.Width = 400
+$uiConfigBufferSize.Height = 9999
+$uiConfigScreenSizeMax = $uiConfig.MaxPhysicalWindowSize
+$uiConfigScreenSizeMaxWidth = $uiConfigScreenSizeMax.Width
+$uiConfigScreenSizeMaxHeight = $uiConfigScreenSizeMax.Height
+$uiConfigScreenSize = $uiConfig.WindowSize
+If ($uiConfigScreenSizeMaxWidth -lt 200) {
+	$uiConfigScreenSize.Width = $uiConfigScreenSizeMaxWidth
+} Else {
+	$uiConfigScreenSize.Width = 200
+}
+If ($uiConfigScreenSizeMaxHeight -lt 75) {
+	$uiConfigScreenSize.Height = $uiConfigScreenSizeMaxHeight - 5
+} Else {
+	$uiConfigScreenSize.Height = 75
+}
+$uiConfig.BufferSize = $uiConfigBufferSize
+$uiConfig.WindowSize = $uiConfigScreenSize

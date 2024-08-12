@@ -1,0 +1,29 @@
+function Verb-Name {
+    <#
+    .SYNOPSIS
+    Enter quick description here
+
+    .DESCRIPTION
+    Enter Description Here
+
+    .PARAMETER Param1
+
+    .EXAMPLE
+    Example here
+    Description of example here
+
+    #>
+    [CmdletBinding()]
+    param (
+
+    )
+    Begin {
+        
+    }
+    Process {
+        
+    }
+    End {
+        
+    }
+}

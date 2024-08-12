@@ -1,0 +1,41 @@
+##Parameter Type Validation
+[string] # A simple string in single or double quotes
+[string[]] # An array of strings (to accept multiple values)
+[int] # Whole numbers without decimals
+[float] # Floating-point numbers with decimals
+[bool] # True or False
+[array] # Collection of values
+[hashtable] # Collection of key-value pairs
+[datetime] # a date-time value
+[object] # .NET Object
+
+##Parameter value validation
+[ValidateRange(1, 100)] # Validates a range of numbers
+[ValidateLength(1, 10)] # Validates the lengths of a string parameter
+[ValidatePattern(“[A-Za-z]+”)] # Validate a values against a regular expression pattern
+[ValidateNotNullOrEmpty()] # Ensure that a parameter is not null or empty
+[ValidateScript({ $_ -gt 0 })] # Validate a parameter using a custom script block
+[AllowNull()]
+[AllowEmptyString()]
+[AllowEmptyCollection()]
+
+#Set Parameter attributes
+[Parameter(Mandatory=$true)] #Parameter is required
+[Parameter(Position=1)] #Assign parameter position
+[Parameter(ValueFromPipeline=$true)] #Sets the parameter to accept value from pipeline
+[Parameter(ValueFromPipelineByProperty=$true)]
+[Parameter(ValueFromRemainingArguments=$true)]
+[Parameter(HelpMessage="Get some help")]
+
+##Examples
+#Validate that a valid IP was entered
+[ValidateScript({
+    if ($_ -match '^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$') {
+        $true
+    } else {
+        throw "Please enter a valid IP address"
+    }
+})]
+
+
+$Paramter

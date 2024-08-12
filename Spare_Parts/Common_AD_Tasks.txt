@@ -1,0 +1,53 @@
+###################
+##NetSH DHCP
+#Export DHCP settings
+netsh dhcp server export C:\FT\dhcp-$hname.txt all
+
+#Import DHCP settings
+netsh dhcp server import C:\FT\dhxp-<name>.txt all
+
+##################
+##Backup DHCP
+#Export DHCP Settings
+Backup-dhcpserver -path C:\FT\DHCPBackup
+
+#Import DHCP Settings
+#Remember to place the "DHCPBackup" file from the last step into the folder "C:\Windows\system32\dhcp\backup"
+Restore-dhcspserver -computername "<PCName>" -Path "C:\Windows\system32\dhcp\backup"
+
+#################
+##Demote the DC
+# Import the ADDSDeployment module
+Import-Module ADDSDeployment
+
+# Uninstall the AD DS role and demote the domain controller
+Uninstall-ADDSDomainController -DemoteOperationMasterRole:$true -RemoveDnsDelegation:$true -Force:$true
+
+# Uninstall the AD DS management tools
+Uninstall-WindowsFeature AD-Domain-Services -IncludeAllSubFeature
+
+#####################
+#Repair Domain Trust
+Test-ComputerSecureChannel -Repair -Credential "<Username>"
+
+#########################
+##Promote to a DC
+#Join the domain
+Add-Computer -DomainName <DomainName>
+
+#Install AD DS Management tools
+Install-WindowsFeature AD-Domain-services, DNS -IncludeManagementTools
+
+#Promote to DC
+Install-ADDSDomainController -DomainName <contoso.com> -InstallDns -SafeModeAdministratorPassword (ConvertTo-SecureString -AsPlainText "<PurpleElephant42@>" -Force)
+
+##############################
+##WMIC leave and join domain
+wmic computersystem where name="%computername%" call joindomainorworkgroup name="WorkGroup"
+
+wmic computersystem where name="%computername%" call joindomainorworkgroup name="LRJHC" username="bottini\FTadmin" password="SpaceVortex23#" fjoinoptions=3
+
+#################################
+#Repair domain trust with NetDom
+netdom resetpwd /Server:ushq-ad05 /UserD:FTadmin /PasswordD:PurpleTrain42@
+
