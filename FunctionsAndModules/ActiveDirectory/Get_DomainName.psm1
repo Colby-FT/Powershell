@@ -24,6 +24,8 @@ function Get-DomainName {
         }
     }
     End{
-        return $domainName
+        if (!([string]::isnullorempty($domainName))) {
+            return $domainName
+        }
     }
 }
