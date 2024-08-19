@@ -768,7 +768,7 @@ do {
             [string]$baseFilename = "HealthChecks"
             [string]$HName = $env:Computername
             [string]$DateTime = (Get-Date).ToString("MMddyy_HHmm")
-            [string]$outputFile = "$outputDir\$Hname`_$baseFilename`_$DateTime.txt"
+            [string]$outputFile = "$outputDir\$Hname`_$baseFilename`_$DateTime.csv"
 
             #Generate the file
             New-Item -Path $outputFile -ItemType "file" -Force
@@ -812,7 +812,7 @@ do {
             [string]$baseFilename = "Users"
             [string]$domainName = Get-DomainName
             [string]$DateTime = (Get-Date).ToString("MMddyy_HHmm")
-            [string]$outputFile = "$outputDir\$domainName`_$baseFilename`_$DateTime.txt"
+            [string]$outputFile = "$outputDir\$domainName`_$baseFilename`_$DateTime.csv"
             
             #Do the thing
             Get-ADUser -Filter 'enabled -eq $true' -properties name,SamAccountName,CanonicalName,created,lastlogondate,mail,passwordlastset,passwordneverexpires,enabled | Select-Object name,SamAccountName,CanonicalName,created,lastlogondate,mail,passwordlastset,passwordneverexpires,enabled | Export-Csv $outputFile
@@ -832,7 +832,7 @@ do {
             [string]$baseFilename = "AdminUsers"
             [string]$domainName = Get-DomainName
             [string]$DateTime = (Get-Date).ToString("MMddyy_HHmm")
-            [string]$outputFile = "$outputDir\$domainName`_$baseFilename`_$DateTime.txt"
+            [string]$outputFile = "$outputDir\$domainName`_$baseFilename`_$DateTime.csv"
 
             #Do the thing
             get-adgroupmember -Identity Administrators -Recursive | Select-Object name |foreach-object {Get-ADUser -filter "name -eq '$($_.name)'" -properties *} | select-object name,SamAccountName,CanonicalName,created,lastlogondate,mail,passwordlastset,passwordneverexpires,enabled | Export-CSV $outputFile
