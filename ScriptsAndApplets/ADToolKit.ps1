@@ -4,8 +4,8 @@ A toolkit of some common AD tasks
 
 .DESCRIPTION
 0 - Run some general health checks
-1 - Pull a list of all active users in AD
-2 - Pull a list of all users with administrative privileges in AD
+1 - Pull a list of all active users in AD or users with admin privileges
+2 - Pull a list of all computers or all domain controllers
 3 - Set the password on accounts
 4 - Remove the password never expires flag on accounts
 5 - Set the password expires at next logon flag on accounts
@@ -14,9 +14,10 @@ A toolkit of some common AD tasks
 8 - Purge DNS of a specified entry
 9 - Search DHCP for activity related to an IP
 10 - Scan a network range for active IPs
-11 - Move FSMO roles to different server
+11 - Move FSMO roles to a different server
+99 - Exit
 
-ToDo Finish 3, 4, 5, 6
+ToDo: Purge DNS gets most, but not all entries.  Especially struggles in domains with lots of sites
 #>
 
 #######################
@@ -48,8 +49,8 @@ function Set-ProjectFolder {
     Creates C:\FT\Work\Work and assigns the path to the variable $ProjectFolder
 
     .EXAMPLE
-    Set-ProjectFolder -baseDir "D:\FT" -changeDir
-    Overides the default base directory to creates D:\FT\ and changes to that directory
+    Set-ProjectFolder -baseDir "D:\WorkDir" -changeDir
+    Overides the default base directory to creates D:\WorkDir\ and changes to that directory
 
     #>
     [CmdletBinding()]
@@ -349,8 +350,8 @@ function Prompt-User {
     # Prompt the user to choose an option
     $choice = Read-Host "Choose an option
     0 - Run some general health checks
-    1 - Pull a list of all active users in AD
-    2 - Pull a list of all users with administrative privileges in AD
+    1 - Pull a list of all active users in AD or users with admin privileges
+    2 - Pull a list of all computers or all domain controllers
     3 - Set the password on accounts
     4 - Remove the password never expires flag on accounts
     5 - Set the password expires at next logon flag on accounts
@@ -756,7 +757,7 @@ do {
     switch ($userChoice) {
         #Health checks (Complete)
         0 {
-            #Ask the user to use default FT or not
+            #Ask the user to use default workdir or not
             $UserSetDir = Read-Host -Prompt "Enter the path you want to use for the working directory. Leave blank to use the default C:\FT\"
             if ([string]::isnullorempty($UserSetDir)){
                 [string]$outputDir = Set-ProjectFolder
@@ -768,7 +769,7 @@ do {
             [string]$baseFilename = "HealthChecks"
             [string]$HName = $env:Computername
             [string]$DateTime = (Get-Date).ToString("MMddyy_HHmm")
-            [string]$outputFile = "$outputDir\$Hname`_$baseFilename`_$DateTime.csv"
+            [string]$outputFile = "$outputDir\$Hname`_$baseFilename`_$DateTime.txt"
 
             #Generate the file
             New-Item -Path $outputFile -ItemType "file" -Force
@@ -799,7 +800,7 @@ do {
         }
         #Pull users (Complete)
         1 {
-            #Ask the user to use default FT or not
+            #Ask the user to use default workdir or not
             Write-Host "Enter the path you want to use for the working directory. Leave blank to use the default C:\FT\"
             $UserSetDir = Read-Host
             if ([string]::isnullorempty($UserSetDir)){
@@ -808,18 +809,36 @@ do {
             else {
                 [string]$outputDir = Set-ProjectFolder -baseDir "$UserSetDir"
             }
-            # Set some variables
-            [string]$baseFilename = "Users"
-            [string]$domainName = Get-DomainName
-            [string]$DateTime = (Get-Date).ToString("MMddyy_HHmm")
-            [string]$outputFile = "$outputDir\$domainName`_$baseFilename`_$DateTime.csv"
-            
-            #Do the thing
-            Get-ADUser -Filter 'enabled -eq $true' -properties name,SamAccountName,CanonicalName,created,lastlogondate,mail,passwordlastset,passwordneverexpires,enabled | Select-Object name,SamAccountName,CanonicalName,created,lastlogondate,mail,passwordlastset,passwordneverexpires,enabled | Export-Csv $outputFile
+            $userType = Read-Host "Would you like to:
+            1 - Pull all active users
+            2 - Pull all users with administrative privileges"
+            switch($userType){
+                1{
+                    # Set some variables
+                    [string]$baseFilename = "Users"
+                    [string]$domainName = Get-DomainName
+                    [string]$DateTime = (Get-Date).ToString("MMddyy_HHmm")
+                    [string]$outputFile = "$outputDir\$domainName`_$baseFilename`_$DateTime.csv"
+                    
+                    #Do the thing
+                    Get-ADUser -Filter 'enabled -eq $true' -properties name,SamAccountName,CanonicalName,created,lastlogondate,mail,passwordlastset,passwordneverexpires,enabled | Select-Object name,SamAccountName,CanonicalName,created,lastlogondate,mail,passwordlastset,passwordneverexpires,enabled | Export-Csv $outputFile
+                }
+                2 {
+                    # Set some variables
+                    [string]$baseFilename = "AdminUsers"
+                    [string]$domainName = Get-DomainName
+                    [string]$DateTime = (Get-Date).ToString("MMddyy_HHmm")
+                    [string]$outputFile = "$outputDir\$domainName`_$baseFilename`_$DateTime.csv"
+                
+                    #Do the thing
+                    get-adgroupmember -Identity Administrators -Recursive | Select-Object name |foreach-object {Get-ADUser -filter "name -eq '$($_.name)'" -properties *} | select-object name,SamAccountName,CanonicalName,created,lastlogondate,mail,passwordlastset,passwordneverexpires,enabled | Export-CSV $outputFile
+                }
+                default{Write-Host "Invalid entry. Please enter 1 or 2." }
+            }
         }
-        #Pull Admins (Complete)
+        #Pull computers (Complete)
         2 {
-            #Ask the user to use default FT or not
+            #Ask the user to use default workdir or not
             Write-Host "Enter the path you want to use for the working directory. Leave blank to use the default C:\FT\"
             $UserSetDir = Read-Host
             if ([string]::isnullorempty($UserSetDir)){
@@ -828,14 +847,34 @@ do {
             else {
                 [string]$outputDir = Set-ProjectFolder -baseDir "$UserSetDir"
             }
-            # Set some variables
-            [string]$baseFilename = "AdminUsers"
-            [string]$domainName = Get-DomainName
-            [string]$DateTime = (Get-Date).ToString("MMddyy_HHmm")
-            [string]$outputFile = "$outputDir\$domainName`_$baseFilename`_$DateTime.csv"
+            $pcType = Read-Host "Would you like to:
+            1 - Pull all computers
+            2 - Pull domain controllers"
+            switch($pcType){
+                1{
+                    # Set some variables
+                    [string]$baseFilename = "Computers"
+                    [string]$domainName = Get-DomainName
+                    [string]$DateTime = (Get-Date).ToString("MMddyy_HHmm")
+                    [string]$outputFile = "$outputDir\$domainName`_$baseFilename`_$DateTime.csv"
+                    
+                    #Do the thing
+                    get-adcomputer -filter * -properties name,LastLogonDate,OperatingSystem,description | select-object name,LastLogonDate,OperatingSystem,description | Export-Csv $outputFile
+                }
+                2{
+                    # Set some variables
+                    [string]$baseFilename = "DCs"
+                    [string]$domainName = Get-DomainName
+                    [string]$DateTime = (Get-Date).ToString("MMddyy_HHmm")
+                    [string]$outputFile = "$outputDir\$domainName`_$baseFilename`_$DateTime.csv"
 
-            #Do the thing
-            get-adgroupmember -Identity Administrators -Recursive | Select-Object name |foreach-object {Get-ADUser -filter "name -eq '$($_.name)'" -properties *} | select-object name,SamAccountName,CanonicalName,created,lastlogondate,mail,passwordlastset,passwordneverexpires,enabled | Export-CSV $outputFile
+                    # Get the distinguished name of the Domain Controllers OU
+                    $DcOu = (Get-ADOrganizationalUnit -Filter 'Name -eq "Domain Controllers"').DistinguishedName
+
+                    # Use the distinguished name in the Get-ADComputer command
+                    Get-ADComputer -Filter * -SearchBase $DcOu -Properties Name,LastLogonDate,OperatingSystem,Description | Select-Object Name,LastLogonDate,OperatingSystem,Description
+                }
+            }
         }
         #Set pw (Complete)
         3 {
