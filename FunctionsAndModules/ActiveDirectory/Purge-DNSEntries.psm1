@@ -1,5 +1,4 @@
-Function Purge-DNSEntries
-{
+Function Purge-DNSEntries {
     <#
     .SYNOPSIS
 	Purge DNS of stale entries
@@ -31,7 +30,9 @@ Function Purge-DNSEntries
             $records = Get-DnsServerResourceRecord -ZoneName $Zone.ZoneName | Where-Object {
             $_.HostName -match "$PurgeThis" -or
             $_.RecordData.PtrDomainName -match "$PurgeThis" -or
-            $_.RecordData.NameServer -match "$PurgeThis"
+            $_.RecordData.NameServer -match "$PurgeThis" -or
+            $_.recorddata.HostNameAlias -match "$PurgeThis" -or
+            $_.recorddata.DomainName -match "$PurgeThis"
             }
 
             foreach ($record in $records) {

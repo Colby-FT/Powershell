@@ -7,6 +7,7 @@ function Move-FSMO {
     Moves FSMO roles to selected computer
 
     .PARAMETER DestDir
+    .PARAMETER Force
 
     .EXAMPLE
     Move-FSMO
@@ -24,6 +25,7 @@ function Move-FSMO {
     [CmdletBinding()]
     Param (
     [string]$DestServer
+    [switch]$Force
     )
     Begin {
         if ([string]::isnullorempty($DestServer)) {
@@ -31,6 +33,22 @@ function Move-FSMO {
         }
     }
     Process {
-        Move-ADDirectoryServerOperationMasterRole -Identity $DestServer -OperationMasterRole DomainNamingMaster,InfrastructureMaster,PDCEmulator,RIDMaster,SchemaMaster
+        If(!($Force)){
+            Move-ADDirectoryServerOperationMasterRole -Identity $DestServer -OperationMasterRole DomainNamingMaster,InfrastructureMaster,PDCEmulator,RIDMaster,SchemaMaster
+        }
+        Else{
+            Move-ADDirectoryServerOperationMasterRole -Identity $DestServer -OperationMasterRole DomainNamingMaster,InfrastructureMaster,PDCEmulator,RIDMaster,SchemaMaster -Force
+        }
+    }
+    End {
+        $FSMO = New-Object PSObject -Property @{
+            SchemaMaster = (Get-ADForest).SchemaMaster
+            DomainNamingMaster = (Get-ADForest).DomainNamingMaster
+            PDCEmulator = (Get-ADDomain).PDCEmulator
+            RIDMaster = (Get-ADDomain).RIDMaster
+            InfrastructureMaster = (Get-ADDomain).InfrastructureMaster
+        }
+        $FSMO
+        Return $FSMO
     }
 }

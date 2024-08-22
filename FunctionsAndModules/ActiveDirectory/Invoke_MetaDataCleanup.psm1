@@ -26,9 +26,8 @@ Function Invoke-MetaDataCleanup{
         #Get all AD Sites
         $AllADSites = Get-ADReplicationSite -Filter "*"
 
-
-        #Formulate the FQDN of the former and new DC
-        $DCToRemoveFQDN = "$($ADDCNameToRemove).$($FullyQualifiedDomainName)"
+        #Formulate the FQDN of the DC
+        #$DCToRemoveFQDN = "$($ADDCNameToRemove).$($FullyQualifiedDomainName)"
     }
     Process {
         :AllADSites Foreach ($AdSite in $AllADSites) {
@@ -78,6 +77,3 @@ Function Invoke-MetaDataCleanup{
         }
     }
 }
-
-
-

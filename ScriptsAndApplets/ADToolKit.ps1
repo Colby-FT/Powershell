@@ -159,7 +159,7 @@ function Get-DHCPLogInfo {
 }
 
 #Function to purge entry from DNS
-Function Purge-DNSEntries{
+Function Purge-DNSEntries {
     <#
     .SYNOPSIS
 	Purge DNS of stale entries
@@ -191,7 +191,9 @@ Function Purge-DNSEntries{
             $records = Get-DnsServerResourceRecord -ZoneName $Zone.ZoneName | Where-Object {
             $_.HostName -match "$PurgeThis" -or
             $_.RecordData.PtrDomainName -match "$PurgeThis" -or
-            $_.RecordData.NameServer -match "$PurgeThis"
+            $_.RecordData.NameServer -match "$PurgeThis" -or
+            $_.recorddata.HostNameAlias -match "$PurgeThis" -or
+            $_.recorddata.DomainName -match "$PurgeThis"
             }
 
             foreach ($record in $records) {
@@ -361,6 +363,7 @@ function Prompt-User {
     9 - Search DHCP for activity related to an IP
     10 - Scan a network range for active IPs
     11 - Move FSMO roles to a different server
+    12 - Perform a metadata cleanup (Remove a demoted or tombstoned DC from AD)
     99 - Exit
     "
     return $choice
@@ -376,6 +379,7 @@ function Move-FSMO {
     Moves FSMO roles to selected computer
 
     .PARAMETER DestDir
+    .PARAMETER Force
 
     .EXAMPLE
     Move-FSMO
@@ -393,6 +397,7 @@ function Move-FSMO {
     [CmdletBinding()]
     Param (
     [string]$DestServer
+    [switch]$Force
     )
     Begin {
         if ([string]::isnullorempty($DestServer)) {
@@ -400,7 +405,23 @@ function Move-FSMO {
         }
     }
     Process {
-        Move-ADDirectoryServerOperationMasterRole -Identity $DestServer -OperationMasterRole DomainNamingMaster,InfrastructureMaster,PDCEmulator,RIDMaster,SchemaMaster
+        If(!($Force)){
+            Move-ADDirectoryServerOperationMasterRole -Identity $DestServer -OperationMasterRole DomainNamingMaster,InfrastructureMaster,PDCEmulator,RIDMaster,SchemaMaster
+        }
+        Else{
+            Move-ADDirectoryServerOperationMasterRole -Identity $DestServer -OperationMasterRole DomainNamingMaster,InfrastructureMaster,PDCEmulator,RIDMaster,SchemaMaster -Force
+        }
+    }
+    End {
+        $FSMO = New-Object PSObject -Property @{
+            SchemaMaster = (Get-ADForest).SchemaMaster
+            DomainNamingMaster = (Get-ADForest).DomainNamingMaster
+            PDCEmulator = (Get-ADDomain).PDCEmulator
+            RIDMaster = (Get-ADDomain).RIDMaster
+            InfrastructureMaster = (Get-ADDomain).InfrastructureMaster
+        }
+        $FSMO
+        Return $FSMO
     }
 }
 
@@ -727,6 +748,87 @@ function Set-PwExpiresNextLogon {
     }
 }
 
+#Funtion to do Metadata cleanup
+Function Invoke-MetaDataCleanup{
+    <#
+    .SYNOPSIS
+    Removes a Domain Controller from Active Directory
+
+    .DESCRIPTION
+    Performs a complete metadata cleanup of a domain controller.
+    Make sure to seize any roles
+
+    .PARAMETER DcToRemove
+
+    .EXAMPLE
+    Remove-DCFromAD -DcToRemove DC01
+    Performs a metadata cleanup of DC01
+
+    #>
+    [CmdletBinding()]
+    param(
+        $DcToRemove
+    )
+    Begin {
+        #Gather Domain info
+        $FullyQualifiedDomainName = (Get-ADDomain).DNSRoot
+        $DomainDistinguishedName = (Get-ADDomain).DistinguishedName
+
+        #Get all AD Sites
+        $AllADSites = Get-ADReplicationSite -Filter "*"
+
+        #Formulate the FQDN of the DC
+        #$DCToRemoveFQDN = "$($ADDCNameToRemove).$($FullyQualifiedDomainName)"
+    }
+    Process {
+        :AllADSites Foreach ($AdSite in $AllADSites) {
+            Write-Host "Working on site $($AdSite.Name)"
+
+            Write-Host "Checking if site $($AdSite.Name) contains $($DcToRemove)"
+            $DC_In_Site = $null
+            $DC_In_Site = Get-ADObject -Identity "cn=$($DcToRemove),cn=servers,$($AdSite.DistinguishedName)" -Partition "CN=Configuration,$($DomainDistinguishedName)" -Properties * -ErrorAction SilentlyContinue
+
+            If ($null -ne $DC_In_Site) {
+                Write-Host "Site $($AdSite.Name) contains $($DcToRemove)" -ForegroundColor Cyan
+                $StandardOut = New-TemporaryFile
+                $ErrorOut = New-TemporaryFile
+                
+                Write-Host "Attempting to cleanup NTDS for $($DcToRemove)" -ForegroundColor Yellow
+                $NTDS = $null
+                $NTDS = Start-process -FilePath ntdsutil -argumentList """metadata cleanup"" ""remove selected server cn=$($DcToRemove),cn=servers,$($AdSite.DistinguishedName)"" q q" -wait -nonewwindow -RedirectStandardOutput $StandardOut.FullName -RedirectStandardError $ErrorOut -PassThru
+
+                Get-Content -Path $StandardOut -Raw
+                Remove-Item -Path $StandardOut -Confirm:$false -Force
+
+                If ($NTDS.ExitCode -gt 0){
+                    Get-Content -Path $ErrorOut -Raw
+                    Remove-Item -Path $ErrorOut -Confirm:$false -Force
+                    Throw "NTDS exit code was $($NTDS.ExitCode)"
+                }
+
+                Write-Host "Cleaned up NTDS for $($DcToRemove)" -ForegroundColor Green
+
+
+                Write-Host "Attempting to cleanup site object for $($DcToRemove)" -ForegroundColor Yellow
+                $DC_In_Site = Get-ADObject -Identity "cn=$($DcToRemove),cn=servers,$($AdSite.DistinguishedName)" -Partition "CN=Configuration,$($DomainDistinguishedName)" -Properties * -ErrorAction SilentlyContinue
+                $DC_In_Site | Remove-ADObject -Recursive -Confirm:$false
+                Write-Host "Cleaned up site object for $($DcToRemove)" -ForegroundColor Green
+
+                Write-Host "Attempting to cleanup other AD objects with this DC name" -ForegroundColor Yellow
+                $All_AD_Objects = Get-ADObject -Filter "*" 
+                Foreach ($AD_Object in $All_AD_Objects) {
+                    If ($AD_Object.DistinguishedName -like "*$($DcToRemove)*") {
+                        Write-Host "Attempting to remove AD object $($AD_Object.DistinguishedName)" -ForegroundColor Yellow
+                        $AD_Object | Remove-ADObject -Recursive -Confirm:$false 
+                        Write-Host "Removed AD object $($AD_Object.DistinguishedName)" -ForegroundColor Green
+                    }
+                }
+                break AllADSites
+            }    
+        }
+    }
+}
+
 #######################
 ##### Formatting #####
 #####################
@@ -777,7 +879,11 @@ do {
             # Run the commands and write the output to the file
             Write-Host "Getting FSMO roles"
             Add-Content -Path $outputFile -Value "-----FSMO START-----"
-            netdom query fsmo | Add-Content -Path $outputFile
+            Write-OutPut "Schema Master : $((Get-ADForest).SchemaMaster)" | Add-Content -Path $outputFile
+            Write-OutPut "Domain Naming Master : $((Get-ADForest).DomainNamingMaster) | Add-Content -Path $outputFile
+            Write-OutPut "PDC Emulator : $((Get-ADDomain).PDCEmulator) | Add-Content -Path $outputFile
+            Write-OutPut "RID Master : $((Get-ADDomain).RIDMaster) | Add-Content -Path $outputFile
+            Write-OutPut "Infrastructure Master : $((Get-ADDomain).InfrastructureMaster) | Add-Content -Path $outputFile
             Add-Content -Path $outputFile -Value "-----FSMO END-----"
 
             Write-Host "Running RepAdmin /showrepl"
@@ -1003,6 +1109,10 @@ do {
             else {
                 Move-FSMO -DestServer $UserSetPC
             }
+        }
+        12 {
+            $DcToRmv = Read-Host "Enter the name of the Domain Controller you would like to perform a metadata cleanup for.  NOTE: This can NOT be undone. : "
+            Invoke-MetaDataCleanup -DcToRemove $DcToRemove
         }
         99 {
             Write-Host "Thank you for using the AD Toolkit."
