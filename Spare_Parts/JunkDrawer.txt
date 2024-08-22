@@ -1,4 +1,67 @@
 
+
+
+#####Stuff For DNS Purge
+Write-Host "Get all DNS records"
+$AllDnsRecords = Get-DnsServerResourceRecord -ZoneName (Get-ADDomain).DNSRoot -ComputerName Tuk-DC02
+
+$AD_DC_Name_To_Remove = "SEA-DC03"
+
+Write-Host "Cleanup DNS for server $($AD_DC_Name_To_Remove)" -ForegroundColor Cyan
+
+Foreach ($Record in $All_DNS_Records)
+    {
+    Switch ($Record.RecordType)
+        {
+        {$_ -eq "A"} 
+            {
+            If ($Record.HostName -like "*$($AD_DC_Name_To_Remove)*")
+                {
+                Write-Host "Removing DNS record" -ForegroundColor Yellow
+                $Record 
+                $Record | Remove-DnsServerResourceRecord -ZoneName $Domain.DNSRoot -ComputerName $($env:ComputerName) -Confirm:$false -Force
+                }
+            ;break
+            }
+
+        {$_ -eq "CNAME"} 
+            {
+            If ($Record.recorddata.HostNameAlias -like "*$($AD_DC_Name_To_Remove)*")
+                {
+                Write-Host "Removing DNS record" -ForegroundColor Yellow
+                $Record 
+                $Record | Remove-DnsServerResourceRecord -ZoneName $Domain.DNSRoot -ComputerName $($env:ComputerName) -Confirm:$false -Force
+                }
+            ;break
+            }
+
+        {$_ -eq "SRV"} 
+            {
+            If ($Record.recorddata.DomainName -like "*$($AD_DC_Name_To_Remove)*")
+                {
+                Write-Host "Removing DNS record" -ForegroundColor Yellow
+                $Record 
+                $Record | Remove-DnsServerResourceRecord -ZoneName $Domain.DNSRoot -ComputerName $($env:ComputerName) -Confirm:$false -Force
+                }
+            ;break
+            }
+
+        {$_ -eq "NS"} #Credit to @davidmi711 for his contribution to this.  
+            {
+            If ($Record.recorddata.DomainName -like "*$($AD_DC_Name_To_Remove)*")
+                {
+                Write-Host "Removing DNS record" -ForegroundColor Yellow
+                $Record 
+                $Record | Remove-DnsServerResourceRecord -ZoneName $Domain.DNSRoot -ComputerName $($env:ComputerName) -Confirm:$false -Force
+                }
+            ;break
+            }
+        }
+    }
+
+
+	
+
 added line
 nother test line
 
