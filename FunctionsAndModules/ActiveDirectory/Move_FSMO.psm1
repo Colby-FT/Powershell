@@ -24,7 +24,7 @@ function Move-FSMO {
 
     [CmdletBinding()]
     Param (
-    [string]$DestServer
+    [string]$DestServer,
     [switch]$Force
     )
     Begin {

@@ -15,6 +15,8 @@ A toolkit of some common AD tasks
 9 - Search DHCP for activity related to an IP
 10 - Scan a network range for active IPs
 11 - Move FSMO roles to a different server
+12 - Perform Metadata Cleanup (Remove demoted or tombstoned DC from AD)
+13 - Reset Kerberos password
 99 - Exit
 
 ToDo: Purge DNS gets most, but not all entries.  Especially struggles in domains with lots of sites
@@ -350,7 +352,7 @@ function Set-DNS {
 #Function to prompt the user
 function Prompt-User {
     # Prompt the user to choose an option
-    $choice = Read-Host "Choose an option
+    $choice = Read-Host 'Choose an option
     0 - Run some general health checks
     1 - Pull a list of all active users in AD or users with admin privileges
     2 - Pull a list of all computers or all domain controllers
@@ -364,8 +366,9 @@ function Prompt-User {
     10 - Scan a network range for active IPs
     11 - Move FSMO roles to a different server
     12 - Perform a metadata cleanup (Remove a demoted or tombstoned DC from AD)
+    13 - Reset Kerberos Password
     99 - Exit
-    "
+    '
     return $choice
 }
 
@@ -396,7 +399,7 @@ function Move-FSMO {
 
     [CmdletBinding()]
     Param (
-    [string]$DestServer
+    [string]$DestServer,
     [switch]$Force
     )
     Begin {
@@ -880,10 +883,10 @@ do {
             Write-Host "Getting FSMO roles"
             Add-Content -Path $outputFile -Value "-----FSMO START-----"
             Write-OutPut "Schema Master : $((Get-ADForest).SchemaMaster)" | Add-Content -Path $outputFile
-            Write-OutPut "Domain Naming Master : $((Get-ADForest).DomainNamingMaster) | Add-Content -Path $outputFile
-            Write-OutPut "PDC Emulator : $((Get-ADDomain).PDCEmulator) | Add-Content -Path $outputFile
-            Write-OutPut "RID Master : $((Get-ADDomain).RIDMaster) | Add-Content -Path $outputFile
-            Write-OutPut "Infrastructure Master : $((Get-ADDomain).InfrastructureMaster) | Add-Content -Path $outputFile
+            Write-OutPut "Domain Naming Master : $((Get-ADForest).DomainNamingMaster)" | Add-Content -Path $outputFile
+            Write-OutPut "PDC Emulator : $((Get-ADDomain).PDCEmulator)" | Add-Content -Path $outputFile
+            Write-OutPut "RID Master : $((Get-ADDomain).RIDMaster)" | Add-Content -Path $outputFile
+            Write-OutPut "Infrastructure Master : $((Get-ADDomain).InfrastructureMaster)" | Add-Content -Path $outputFile
             Add-Content -Path $outputFile -Value "-----FSMO END-----"
 
             Write-Host "Running RepAdmin /showrepl"
@@ -1113,6 +1116,13 @@ do {
         12 {
             $DcToRmv = Read-Host "Enter the name of the Domain Controller you would like to perform a metadata cleanup for.  NOTE: This can NOT be undone. : "
             Invoke-MetaDataCleanup -DcToRemove $DcToRemove
+        }
+        13{
+            $ADUser = "krbtgt"
+            $ADPW = Get-RandomString
+            $password = ConvertTo-SecureString -AsPlainText $ADPW -force
+            Write-Host "Setting Password for " $ADUser " to " $ADPW
+            Set-ADAccountPassword $ADUser -NewPassword $password -Reset
         }
         99 {
             Write-Host "Thank you for using the AD Toolkit."
