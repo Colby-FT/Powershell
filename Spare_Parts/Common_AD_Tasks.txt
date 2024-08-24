@@ -51,3 +51,21 @@ wmic computersystem where name="%computername%" call joindomainorworkgroup name=
 #Repair domain trust with NetDom
 netdom resetpwd /Server:ushq-ad05 /UserD:FTadmin /PasswordD:PurpleTrain42@
 
+#################################
+#Force replication between specific DCs
+$targetDC = @(
+    "DC01",
+    "DC02",
+    "DC03"
+)
+
+$schemaDN = (Get-ADRootDSE).schemaNamingContext
+$sourceDC = "DAL-DC02"
+
+ForEach($Target in $targetDC){
+    Sync-ADObject -Object (Get-ADObject -Identity $schemaDN) -Source $sourceDC -Destination $target
+}
+
+#################################
+#Push AD Replication to all other DCs
+repadmin /syncall /APed

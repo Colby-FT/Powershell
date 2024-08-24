@@ -39,7 +39,7 @@ function Set-DNS {
     )
     Begin {
         $NetAdapter = Get-NetAdapter | Where-Object { (Get-NetIPInterface -InterfaceAlias $_.Name -AddressFamily IPv4 -ErrorAction SilentlyContinue).AddressFamily -eq 'IPv4' };
-        $Adapter = $NetAdapter2.InterfaceIndex
+        $Adapter = $NetAdapter.InterfaceIndex
     }
     Process {
         ForEach($Index in $Adapter) {Set-DnsClientServerAddress -InterfaceIndex $Index -ServerAddresses ("$Primary","$Secondary")}
@@ -47,6 +47,5 @@ function Set-DNS {
     End {
         Write-Host "The IP Settings are:"
         ipconfig /all
-        Read-Host -Prompt "Press any key to exit"
     }
 }
