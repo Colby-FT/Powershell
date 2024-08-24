@@ -336,8 +336,8 @@ function Set-DNS {
         $Secondary = "127.0.0.1"
     )
     Begin {
-        $NetAdapter = Get-NetAdapter | Select-Object InterfaceIndex; 
-        $Adapter = $NetAdapter.InterfaceIndex; 
+        $NetAdapter = Get-NetAdapter | Where-Object { (Get-NetIPInterface -InterfaceAlias $_.Name -AddressFamily IPv4 -ErrorAction SilentlyContinue).AddressFamily -eq 'IPv4' };
+        $Adapter = $NetAdapter.InterfaceIndex
     }
     Process {
         ForEach($Index in $Adapter) {Set-DnsClientServerAddress -InterfaceIndex $Index -ServerAddresses ("$Primary","$Secondary")}
@@ -345,7 +345,6 @@ function Set-DNS {
     End {
         Write-Host "The IP Settings are:"
         ipconfig /all
-        Read-Host -Prompt "Press any key to exit"
     }
 }
 
