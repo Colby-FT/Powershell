@@ -642,7 +642,6 @@ function Disable-AdAccountFromCSV {
     The default is $env:SystemDrive\FT
     .PARAMETER UserNameColumnTitle
     .PARAMETER LogFileName
-    Sets the length of the randomly generated password. The default is 14.
 
     .EXAMPLE
     Disable-AdAccountFromCSV -CsvName "C:\MyFolder\Users.csv"
