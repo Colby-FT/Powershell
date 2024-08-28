@@ -33,7 +33,7 @@ Test-ComputerSecureChannel -Repair -Credential "<Username>"
 #########################
 ##Promote to a DC
 #Join the domain
-Add-Computer -DomainName <DomainName>
+Add-Computer -DomainName KODIAK
 
 #Install AD DS Management tools
 Install-WindowsFeature AD-Domain-services, DNS -IncludeManagementTools
@@ -45,22 +45,20 @@ Install-ADDSDomainController -DomainName <contoso.com> -InstallDns -SafeModeAdmi
 ##WMIC leave and join domain
 wmic computersystem where name="%computername%" call joindomainorworkgroup name="WorkGroup"
 
-wmic computersystem where name="%computername%" call joindomainorworkgroup name="LRJHC" username="bottini\FTadmin" password="SpaceVortex23#" fjoinoptions=3
+wmic computersystem where name="%computername%" call joindomainorworkgroup name="KODIAK" username="KODIAK\FTadmin" password="PurplePaper45%" fjoinoptions=3
 
 #################################
 #Repair domain trust with NetDom
-netdom resetpwd /Server:ushq-ad05 /UserD:FTadmin /PasswordD:PurpleTrain42@
+netdom resetpwd /Server:COR-DC05 /UserD:FTAdmin /PasswordD:YellowPuppy12@
 
 #################################
 #Force replication between specific DCs
 $targetDC = @(
-    "DC01",
-    "DC02",
-    "DC03"
+    "COR-DC04"
 )
 
 $schemaDN = (Get-ADRootDSE).schemaNamingContext
-$sourceDC = "DAL-DC02"
+$sourceDC = "COR-DC05"
 
 ForEach($Target in $targetDC){
     Sync-ADObject -Object (Get-ADObject -Identity $schemaDN) -Source $sourceDC -Destination $target
@@ -69,3 +67,7 @@ ForEach($Target in $targetDC){
 #################################
 #Push AD Replication to all other DCs
 repadmin /syncall /APed
+
+##################################
+#Force DFSR replication
+Sync-DfsReplicationGroup -GroupName "Domain System Volume" -SourceComputerName "COR-DC04" -DestinationComputerName "COR-DC05" -DurationInMinutes 15

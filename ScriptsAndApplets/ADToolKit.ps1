@@ -1017,7 +1017,7 @@ do {
                 2 {
                     $UserSetCSV = Read-Host 'Enter the path to the CSV with the list of SAM Account Names. i.e. "C:\FT\Users.csv": '
                     $UserSetDir = Read-Host 'Enter the path for the working directory. i.e. "C:\FT\": '
-                    Set-PasswordNeverExpires -CsvName $UserCsv -ProjectFolder $UserSetDir
+                    Set-PasswordNeverExpires -CsvName $UserSetCsv -ProjectFolder $UserSetDir
                 }
                 default {
                     Write-Host "Please enter 1 for all users or 2 for users from CSV."
@@ -1113,7 +1113,7 @@ do {
         }
         12 {
             $DcToRmv = Read-Host "Enter the name of the Domain Controller you would like to perform a metadata cleanup for.  NOTE: This can NOT be undone. : "
-            Invoke-MetaDataCleanup -DcToRemove $DcToRemove
+            Invoke-MetaDataCleanup -DcToRemove $DcToRmv
         }
         13{
             $ADUser = "krbtgt"
