@@ -849,6 +849,28 @@ Write-Host "|                                                         |" -ForeGr
 Write-Host "===========================================================" -ForeGroundColor Green
 Write-Host ""
 
+Write-Host ""
+Write-Host "You are working on $env:ComputerName" -ForeGroundColor Green
+Write-Host ""
+$IPInfo = (Get-NetIPAddress -AddressFamily IPv4).IPAddress
+Write-Host "The IP is $IPInfo" -ForeGroundColor Green
+Write-Host ""
+Write-Host "The domain is" (Get-ADDomain).DNSRoot  -ForeGroundColor Green
+Write-Host ""
+$InfoDcOu = (Get-ADOrganizationalUnit -Filter 'Name -eq "Domain Controllers"').DistinguishedName
+$InfoDCs = Get-ADComputer -Filter * -SearchBase $InfoDcOu -Properties Name | Select-Object Name,LastLogonDate,OperatingSystem
+Write-Host "The domain controllers are:"  -ForeGroundColor Green
+$InfoDCs | ForEach-Object { Write-Host $_.name -ForegroundColor Green }
+Write-Host ""
+Write-Host "The FSMO roles holders are:"  -ForeGroundColor Green
+Write-Host "Schema Master : $((Get-ADForest).SchemaMaster)" -ForeGroundColor Green
+Write-Host "Domain Naming Master : $((Get-ADForest).DomainNamingMaster)" -ForeGroundColor Green
+Write-Host "PDC Emulator : $((Get-ADDomain).PDCEmulator)" -ForeGroundColor Green
+Write-Host "RID Master : $((Get-ADDomain).RIDMaster)" -ForeGroundColor Green
+Write-Host "Infrastructure Master : $((Get-ADDomain).InfrastructureMaster)"  -ForeGroundColor Green
+Write-Host ""
+
+
 #########################
 ##### Do The Thing #####
 #######################
@@ -1011,12 +1033,12 @@ do {
             "
             switch ($AllOrCsv){
                 1 {
-                    $UserSetDir = Read-Host 'Enter the path for the working directory. i.e. "C:\FT\": '
+                    $UserSetDir = Read-Host 'Enter the path for the working directory. i.e. C:\FT\ '
                     Set-PasswordNeverExpires -ProjectFolder $UserSetDir
                 }
                 2 {
-                    $UserSetCSV = Read-Host 'Enter the path to the CSV with the list of SAM Account Names. i.e. "C:\FT\Users.csv": '
-                    $UserSetDir = Read-Host 'Enter the path for the working directory. i.e. "C:\FT\": '
+                    $UserSetCSV = Read-Host 'Enter the path to the CSV with the list of SAM Account Names. i.e. C:\FT\Users.csv: '
+                    $UserSetDir = Read-Host 'Enter the path for the working directory. i.e. C:\FT\ '
                     Set-PasswordNeverExpires -CsvName $UserSetCsv -ProjectFolder $UserSetDir
                 }
                 default {
@@ -1032,12 +1054,12 @@ do {
             "
             switch ($AllOrCsv){
                 1 {
-                    $UserSetDir = Read-Host 'Enter the path for the working directory. i.e. "C:\FT\": '
+                    $UserSetDir = Read-Host 'Enter the path for the working directory. i.e. C:\FT\ '
                     Set-PwExpiresNextLogon -ProjectFolder $UserSetDir
                 }
                 2 {
-                    $UserSetCSV = Read-Host 'Enter the path to the CSV with the list of SAM Account Names. i.e. "C:\FT\Users.csv": '
-                    $UserSetDir = Read-Host 'Enter the path for the working directory. i.e. "C:\FT\": '
+                    $UserSetCSV = Read-Host 'Enter the path to the CSV with the list of SAM Account Names. i.e. C:\FT\Users.csv '
+                    $UserSetDir = Read-Host 'Enter the path for the working directory. i.e. C:\FT\ '
                     Set-PwExpiresNextLogon -CsvName $UserSetCSV -ProjectFolder $UserSetDir
                 }
                 default {
@@ -1047,8 +1069,8 @@ do {
         }
         #Disable accounts (Complete)
         6 {
-            $UserSetCSV = Read-Host 'Enter the path to the CSV with the list of SAM Account Names. i.e. "C:\FT\Users.csv": '
-            $UserSetDir = Read-Host 'Enter the path for the working directory. i.e. "C:\FT\": '
+            $UserSetCSV = Read-Host 'Enter the path to the CSV with the list of SAM Account Names. i.e. C:\FT\Users.csv '
+            $UserSetDir = Read-Host 'Enter the path for the working directory. i.e. C:\FT\ '
             Disable-AdAccountFromCSV -CsvName $UserSetCSV -ProjectFolder $UserSetDir
         }
         #Set DNS (Complete)

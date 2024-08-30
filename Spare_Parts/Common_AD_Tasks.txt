@@ -54,11 +54,12 @@ netdom resetpwd /Server:COR-DC05 /UserD:FTAdmin /PasswordD:YellowPuppy12@
 #################################
 #Force replication between specific DCs
 $targetDC = @(
-    "COR-DC04"
+    "KOD-DC001",
+    "KOD-DC002"
 )
 
 $schemaDN = (Get-ADRootDSE).schemaNamingContext
-$sourceDC = "COR-DC05"
+$sourceDC = "KOD-DC04"
 
 ForEach($Target in $targetDC){
     Sync-ADObject -Object (Get-ADObject -Identity $schemaDN) -Source $sourceDC -Destination $target
@@ -70,4 +71,4 @@ repadmin /syncall /APed
 
 ##################################
 #Force DFSR replication
-Sync-DfsReplicationGroup -GroupName "Domain System Volume" -SourceComputerName "COR-DC04" -DestinationComputerName "COR-DC05" -DurationInMinutes 15
+Sync-DfsReplicationGroup -GroupName "Domain System Volume" -SourceComputerName "KOD-DC04" -DestinationComputerName "KOD-DC001" -DurationInMinutes 15
