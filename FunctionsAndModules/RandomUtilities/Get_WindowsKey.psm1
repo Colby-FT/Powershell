@@ -14,17 +14,18 @@ function Get-WindowsKey {
     Process {
         # Initialize variables
         $oemKey = $null
-        $nonOemKey = $null
-        $regKey = $null
+        $BakupKey = $null
+        $DigProdKey = $null
 
-        # Check for OEM key
-        $oemKey = (Get-WmiObject -query 'select * from SoftwareLicensingService').OA3xOriginalProductKey
+        $oemkey = Get-CimInstance -ClassName SoftwareLicensingService | Select-Object -ExpandProperty OA3xOriginalProductKey
+        if ([string]::IsNullOrWhiteSpace($oemKey)) {
+            $oemKey = (Get-WmiObject -query 'select * from SoftwareLicensingService').OA3xOriginalProductKey
+        }
 
-        # Check for non-OEM key
-        $nonOemKey = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SoftwareProtectionPlatform').BackupProductKeyDefault
+        $BakupKey = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SoftwareProtectionPlatform').BackupProductKeyDefault
 
-        # Check for registry key
-        $regKey = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion').DigitalProductId
+        $DigProdKey = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion').DigitalProductId
+        $DigProdKey4 = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion').DigitalProductId4
     }
 
     End {
@@ -33,12 +34,21 @@ function Get-WindowsKey {
         if (![string]::IsNullOrWhiteSpace($oemKey)) {
             $results += "OEM Key: $oemKey"
         }
-        if (![string]::IsNullOrWhiteSpace($nonOemKey)) {
-            $results += "MS Windows Key: $nonOemKey"
+        if (![string]::IsNullOrWhiteSpace($BakupKey)) {
+            $results += "Backup Key: $BakupKey
+            This is the key windows uses if no key is provided during installation."
         }
-        if ($regKey) {
-            $decodedKey = ConvertTo-ProductKey $regKey
-            $results += "MS Windows NT Key: $decodedKey"
+        if (![string]::IsNullOrWhiteSpace($DigProdKey)) {
+            $decodedKey = ConvertTo-ProductKey $DigProdKey
+            $decodedKey = $decodedKey[-1]
+            $results += "Digital Product Key: $decodedKey
+            Check against key showing in Activation Settings. Depending on key type this is often a 'dummy key' generated as a placeholder for the real key."
+        }
+        if (![string]::IsNullOrWhiteSpace($DigProdKey4)) {
+            $decodedKey4 = ConvertTo-ProductKey $DigProdKey4
+            $decodedKey4 = $decodedKey4[-1]
+            $results += "Digital Product Key 4: $decodedKey4
+            Check against key showing in Activation Settings. Depending on key type this is often a 'dummy key' generated as a placeholder for the real key."
         }
 
         if ($results.Count -gt 0) {
