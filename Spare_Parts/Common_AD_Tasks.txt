@@ -33,7 +33,7 @@ Test-ComputerSecureChannel -Repair -Credential "<Username>"
 #########################
 ##Promote to a DC
 #Join the domain
-Add-Computer -DomainName KODIAK
+add-computer -ComputerName NDI-WDC-002 -DomainName VW-DOMAIN -Server NDI-WDC-03
 
 #Install AD DS Management tools
 Install-WindowsFeature AD-Domain-services, DNS -IncludeManagementTools
@@ -49,17 +49,17 @@ wmic computersystem where name="%computername%" call joindomainorworkgroup name=
 
 #################################
 #Repair domain trust with NetDom
-netdom resetpwd /Server:COR-DC05 /UserD:FTAdmin /PasswordD:YellowPuppy12@
+netdom resetpwd /Server:VWNYSDC01 /UserD:FTtwo /PasswordD:GreenGorilla23#
 
 #################################
 #Force replication between specific DCs
 $targetDC = @(
-    "KOD-DC001",
-    "KOD-DC002"
+    "NDI-WDC-002",
+    "NDI-WDC-001"
 )
 
 $schemaDN = (Get-ADRootDSE).schemaNamingContext
-$sourceDC = "KOD-DC04"
+$sourceDC = "NDI-WDC-03"
 
 ForEach($Target in $targetDC){
     Sync-ADObject -Object (Get-ADObject -Identity $schemaDN) -Source $sourceDC -Destination $target
