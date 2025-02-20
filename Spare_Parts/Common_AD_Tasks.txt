@@ -24,11 +24,11 @@ Import-Module ADDSDeployment
 Uninstall-ADDSDomainController -DemoteOperationMasterRole:$true -RemoveDnsDelegation:$true -Force:$true
 
 # Uninstall the AD DS management tools
-Uninstall-WindowsFeature AD-Domain-Services -IncludeAllSubFeature
+Uninstall-WindowsFeature AD-Domain-Services -IncludeManagementTools
 
 #####################
 #Repair Domain Trust
-Test-ComputerSecureChannel -Repair -Credential "<Username>"
+Test-ComputerSecureChannel -Repair -Credential "layer3.admin.ven"
 
 #########################
 ##Promote to a DC
@@ -49,17 +49,22 @@ wmic computersystem where name="%computername%" call joindomainorworkgroup name=
 
 #################################
 #Repair domain trust with NetDom
-netdom resetpwd /Server:VWNYSDC01 /UserD:FTtwo /PasswordD:GreenGorilla23#
+netdom resetpwd /Server:<DCName> /UserD:<AdminUN> /PasswordD:<AdminPW>
+Example: netdom resetpwd /Server:FHHDC02 /UserD:ftadmin /PasswordD:SpaceMonkey45%
 
 #################################
 #Force replication between specific DCs
 $targetDC = @(
-    "NDI-WDC-002",
-    "NDI-WDC-001"
+    "IKAV-AZ-DC01A",
+    "IKAV-AZ-DC02A",
+    "IKAV-BOC-DC01",
+    "IKAV-HOU-DC01",
+    "IKAV-BOC-DC02",
+    "IKAV-FRP-DC02"
 )
 
 $schemaDN = (Get-ADRootDSE).schemaNamingContext
-$sourceDC = "NDI-WDC-03"
+$sourceDC = "IKAV-FRP-DC01"
 
 ForEach($Target in $targetDC){
     Sync-ADObject -Object (Get-ADObject -Identity $schemaDN) -Source $sourceDC -Destination $target
@@ -71,4 +76,4 @@ repadmin /syncall /APed
 
 ##################################
 #Force DFSR replication
-Sync-DfsReplicationGroup -GroupName "Domain System Volume" -SourceComputerName "KOD-DC04" -DestinationComputerName "KOD-DC001" -DurationInMinutes 15
+Sync-DfsReplicationGroup -GroupName "Domain System Volume" -SourceComputerName "NDI-WDC-001A" -DestinationComputerName "NDI-WDC-002A" -DurationInMinutes 5 -verbose
