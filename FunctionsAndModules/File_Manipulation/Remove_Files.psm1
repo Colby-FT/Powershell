@@ -11,15 +11,15 @@ Function Remove-Files
 	
 	
 	.EXAMPLE
-    Remove-Files -FilesToDelete *.txt
+    Remove-Files -FilesToDelete "*.txt"
     Finds all files on the computer with a .txt extension and deletes them
 
     .EXAMPLE
-    Remove-Files -FilesToDelete *HelloWorld*
+    Remove-Files -FilesToDelete "*HelloWorld*"
     Finds all files on the computer with a HelloWorld in the name and deletes them
     
     .EXAMPLE
-    Remove-Files -FilesToDelete HelloWorld.ps1
+    Remove-Files -FilesToDelete "HelloWorld.ps1"
     Finds all files on the computer named HelloWorld.ps1 and deletes them
 	
     #>

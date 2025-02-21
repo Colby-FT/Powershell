@@ -11,11 +11,11 @@ Function Find-Files
 	
 	
 	.EXAMPLE
-    Find-Files -FilesToFind *.txt
+    Find-Files -FilesToFind "*.txt"
     Finds all files on the computer with a .txt extension
 
     .EXAMPLE
-    Find-Files -FilesToFind *HelloWorld*
+    Find-Files -FilesToFind "*HelloWorld*"
     Finds all files on the computer with HelloWorld anywhere in the name
 	
     #>

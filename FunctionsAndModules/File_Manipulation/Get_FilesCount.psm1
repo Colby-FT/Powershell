@@ -11,11 +11,11 @@ Function Get-FilesCount
 	
 	
 	.EXAMPLE
-    Get-FilesCount -FilesToFind *.txt
+    Get-FilesCount -FilesToFind "*.txt"
     Finds all files on the computer with a .txt extension and gets a count
 
     .EXAMPLE
-    Get-FilesCount -FilesToFind *HelloWorld*
+    Get-FilesCount -FilesToFind "*HelloWorld*"
     Finds all files on the computer with HelloWorld anywhere in the name and gets a count
 	
     #>

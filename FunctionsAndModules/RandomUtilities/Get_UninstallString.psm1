@@ -28,7 +28,10 @@ function Get-UninstallString {
             if (Test-Path $RegPath) {
                 Get-ChildItem -LiteralPath $RegPath | ForEach-Object { 
                     Get-ItemProperty -LiteralPath $_.PsPath | ForEach-Object { 
-                        if ($_.DisplayName -match $AppName) { $_ | fl
+                        if ($_.DisplayName -match $AppName) { 
+                            $UninstallString = $_.UninstallString
+                            $DisplayName = $_.DisplayName
+                            Write-host "The provided uninstall string for $DisplayName is $UninstallString"
                         }
                     }
                 }

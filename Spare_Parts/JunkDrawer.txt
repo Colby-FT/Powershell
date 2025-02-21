@@ -6,6 +6,19 @@
 	}
 
 
+##Output to UDF user chooses if user chooses
+	[switch]$OutputToUDF = $false
+	if($OutputToUDF){
+		##Remember to make an environment variable in RMM named UDFNumber
+		$ValueToUDF = <Some-FunctionHere>
+		if($ValueToUDF){
+			New-ItemProperty -Path HKLM:\SOFTWARE\Centrastage -Name "Custom$env:UDFNumber" -PropertyType String -Value "$ValueToUDF" -Force | out-null;
+		}
+	}
+	
+
+
+
 added line
 nother test line
 

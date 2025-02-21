@@ -43,9 +43,8 @@ Function Find-FilesByContent
             $FilesToCheck=Get-PSDrive -PSProvider "FileSystem" |  ForEach-Object {Write-Host -f Green "Gathering from:" $_.Root; Get-ChildItem $_.Root -Force -ErrorAction SilentlyContinue -r -filter *"$FileTypeToSearch"}
         }
         else {
-            $diskToCheck = $CheckThisDisk;
-            Write-Host -f Green "Gathering all" $FileTypeToSearch "Files on" $diskToCheck
-            $FilesToCheck=Get-PSDrive -PSProvider "FileSystem" |  ForEach-Object {Get-ChildItem "$diskToCheck" -Force -ErrorAction SilentlyContinue -r -filter *"$FileTypeToSearch"}
+            Write-Host -f Green "Gathering all" $FileTypeToSearch "Files on" $CheckThisDisk
+            $FilesToCheck=Get-PSDrive -PSProvider "FileSystem" |  ForEach-Object {Get-ChildItem "$CheckThisDisk" -Force -ErrorAction SilentlyContinue -r -filter *"$FileTypeToSearch"}
         }
     }
     PROCESS
