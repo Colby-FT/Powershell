@@ -1,3 +1,20 @@
+##Assign variables
+#Assign Company ID
+if([string]::isnullorempty($env:UsrUsrcsCID)){
+    if([string]::isnullorempty($env:CS_CID)){
+        write-host "No CID provided. Bailing out."
+        exit 1;
+    }
+    else{
+        $UsrcsCID = $env:CS_CID
+    }    
+}
+else{
+    $UsrcsCID = $env:UsrcsCID
+}
+
+
+
 ##Output to UDF user chooses
 	##Remember to make an environment variable in RMM named UDFNumber
 	$ValueToUDF = Some-FunctionHere
@@ -51,21 +68,21 @@ Function Out-Text
 	#>
 	Param
 	(
-		$Path
+		$DestinationPath
 	)
-	$Path = "$($env:USERPROFILE)\Desktop\Registered_Asset.txt"
-	If (!(Test-Path $Path))
+	$DestinationPath = "$($env:USERPROFILE)\Desktop\Registered_Asset.txt"
+	If (!(Test-Path $DestinationPath))
 	{
-		New-Item $Path -ItemType File
-		$AsstLst | ForEach-Object {"`r`nDate Added: $($_.date_added)`r`nDate Updated: $($_.date_updated)`r`nAsset name: $($_.asset_name)`r`nAsset ID: $($_.asset_id)`r`nSerial Number: $($_.serial_number)`r`nManufacturer: $($_.manufacturer)`r`nModel: $($_.model)`r`nDescription: $($_.description)`r`nProduct Key: $($_.product_key)`r`nStatus: $($_.status)`r`nPurchase Price: $($_.purch_price)" | Add-Content -Path $Path}
-		Add-Content -Path $Path -Value "`r`nPLEASE REMEMBER TO DELETE THIS FILE WHEN YOU ARE FINISHED WITH IT."
-		notepad.exe $Path
+		New-Item $DestinationPath -ItemType File
+		$AsstLst | ForEach-Object {"`r`nDate Added: $($_.date_added)`r`nDate Updated: $($_.date_updated)`r`nAsset name: $($_.asset_name)`r`nAsset ID: $($_.asset_id)`r`nSerial Number: $($_.serial_number)`r`nManufacturer: $($_.manufacturer)`r`nModel: $($_.model)`r`nDescription: $($_.description)`r`nProduct Key: $($_.product_key)`r`nStatus: $($_.status)`r`nPurchase Price: $($_.purch_price)" | Add-Content -Path $DestinationPath}
+		Add-Content -Path $DestinationPath -Value "`r`nPLEASE REMEMBER TO DELETE THIS FILE WHEN YOU ARE FINISHED WITH IT."
+		notepad.exe $DestinationPath
 	}
 	Else
 	{
-		$AsstLst | ForEach-Object {"`r`nDate Added: $($_.date_added)`r`nDate Updated: $($_.date_updated)`r`nAsset name: $($_.asset_name)`r`nAsset ID: $($_.asset_id)`r`nSerial Number: $($_.serial_number)`r`nManufacturer: $($_.manufacturer)`r`nModel: $($_.model)`r`nDescription: $($_.description)`r`nProduct Key: $($_.product_key)`r`nStatus: $($_.status)`r`nPurchase Price: $($_.purch_price)" | Add-Content -Path $Path}
-		Add-Content -Path $Path -Value "`r`nPLEASE REMEMBER TO DELETE THIS FILE WHEN YOU ARE FINISHED WITH IT."
-		notepad.exe $Path
+		$AsstLst | ForEach-Object {"`r`nDate Added: $($_.date_added)`r`nDate Updated: $($_.date_updated)`r`nAsset name: $($_.asset_name)`r`nAsset ID: $($_.asset_id)`r`nSerial Number: $($_.serial_number)`r`nManufacturer: $($_.manufacturer)`r`nModel: $($_.model)`r`nDescription: $($_.description)`r`nProduct Key: $($_.product_key)`r`nStatus: $($_.status)`r`nPurchase Price: $($_.purch_price)" | Add-Content -Path $DestinationPath}
+		Add-Content -Path $DestinationPath -Value "`r`nPLEASE REMEMBER TO DELETE THIS FILE WHEN YOU ARE FINISHED WITH IT."
+		notepad.exe $DestinationPath
 	}
 	$AsstLst | ForEach-Object {$assetnumber = $($_.asset_id);$assetmodel = $($_.model);New-DymoLabel -AstNum $assetnumber -AstModel $assetmodel}
 }
@@ -73,44 +90,25 @@ Function Out-Text
 
 
 
-
-
-
-
-##Download Files From Websites
-    $url = "http://website.com/downloads/Iwantthisfile.txt" 
-    $path = "C:\temp\thisisthefile.txt" 
-   # param([string]$url, [string]$path) 
-      
-    if(!(Split-Path -parent $path) -or !(Test-Path -pathType Container (Split-Path -parent $path))) { 
-      $path = Join-Path $pwd (Split-Path -leaf $path) 
-    } 
-      
-    "Downloading [$url]`nSaving at [$path]" 
-    $client = new-object System.Net.WebClient 
-    $client.DownloadFile($url, $path) 
-    #$client.DownloadData($url, $path) 
-      
-    $path
-
+	
 	#
 	    $SysIntsPath = "C:\SysInternals"
 	If (!(Test-Path $SysIntsPath))
 	{
 		$SysIntsZip = "$SysIntsPath\SysInternals.zip"
         New-Item $SysIntsPath -ItemType Directory
-        $URL = "https://download.sysinternals.com/files/SysinternalsSuite.zip" 
+        $SourceURL = "https://download.sysinternals.com/files/SysinternalsSuite.zip" 
         $WebClient = New-Object System.Net.WebClient
-		$WebClient.DownloadFile($URL,$SysIntsZip)
+		$WebClient.DownloadFile($SourceURL,$SysIntsZip)
 		$WebClient.Dispose()	
 	}
 
 	#
 	$BaseURL = 'https://download.microsoft.com/download/1/D/8/1D8B5022-5477-4B9A-8104-6A71FF9D98AB/'
-			$URL = $BaseURL + $dl
+			$SourceURL = $BaseURL + $dl
 			$Destination = Join-Path -Path $HOME -ChildPath "Downloads\$dl"
 			$WebClient = New-Object System.Net.WebClient
-			$WebClient.DownloadFile($URL,$Destination)
+			$WebClient.DownloadFile($SourceURL,$Destination)
 			$WebClient.Dispose()
 
 
