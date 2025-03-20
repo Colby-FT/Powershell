@@ -30,8 +30,7 @@ function Install-AppFromWeb {
     #>
     [CmdletBinding()]
     param (
-        [ValidateNotNullOrEmpty()]
-        [string]$InstallCheckPath,
+        [string]$InstallCheckPath = $null,
 
         [ValidateNotNullOrEmpty()]
         [string]$InstallerUrl,
