@@ -76,5 +76,6 @@ function Install-AppFromWeb {
         # Only clean up if the process was successful
         if ($Success -and (Test-Path -Path $InstallerPath)) {
             Remove-Item -Path $InstallerPath -Force
+        }
     }
 }
