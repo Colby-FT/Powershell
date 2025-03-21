@@ -64,7 +64,7 @@ function Install-AppFromWeb {
         
         try {
             # Run the installer silently
-            Start-Process -FilePath $InstallerPath -ArgumentList "/S" -Wait -ErrorAction Stop
+            Start-Process -FilePath $InstallerPath -ArgumentList $InstallerArguments -Wait -ErrorAction Stop
         } catch {
             Write-Error "Failed to run the installer $InstallerPath. Error: $_"
             $Success = $false
