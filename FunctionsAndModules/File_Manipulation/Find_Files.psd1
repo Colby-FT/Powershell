@@ -12,7 +12,7 @@
 RootModule = 'Find_Files.psm1'
 
 # Version number of this module.
-ModuleVersion = '1.0'
+ModuleVersion = '2.0'
 
 # Supported PSEditions
 # CompatiblePSEditions = @()
@@ -30,7 +30,7 @@ CompanyName = 'Unknown'
 Copyright = '(c) Colby. All rights reserved.'
 
 # Description of the functionality provided by this module
-Description = 'Search the entire computer for files'
+Description = 'This function searches for files on the computer based on the specified pattern. It can search either all drives or a specific drive.'
 
 # Minimum version of the PowerShell engine required by this module
 # PowerShellVersion = ''

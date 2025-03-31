@@ -1,0 +1,989 @@
+# Table of Contents
+# 1. Help and Discovery
+# 2. Properties
+# 3. Formatting Output
+# 4. Format Conversion and File Export
+# 5. PS Modules
+# 6. Common Parameters
+# 7. Operators
+# 8. Parameter Definitions and Attributes
+# 9. Function Template
+# 10. Remote Commands
+# 11. Variables
+# 12. Input and Output
+# 13. Regular Expressions
+# 14. Logic and Loops
+# 15. Error Handling
+# 16. Scripting Best Practices
+############################################################################
+#region Help and Discovery
+    # Purpose: Commands to explore and discover PowerShell cmdlets, objects, and environment.
+    Update-Help
+        # Updates the help files for PowerShell modules on your computer
+
+    Get-Help
+        # Displays help about PowerShell cmdlets and concepts
+            Get-Help Get-Process -Detailed
+                # Shows detailed help for the Get-Process cmdlet
+            Get-Help Get-Process -Examples
+                # Displays examples of how to use the Get-Process cmdlet
+            Get-Help Get-Process -Full
+                # Displays full help, including parameters and examples
+            Get-help Get-*
+                # Lists all cmdlets that begin with "Get-"
+
+    Get-Command
+        # Gets all commands that are installed on the computer
+            Get-Command -Noun *event*
+                # Returns a list of cmdlets dealing with events
+            Get-Command -Verb Get
+                # Returns all cmdlets capable of retrieving things
+
+    Show-Command
+        # Displays a graphical interface to explore cmdlets and their parameters
+            Show-Command Get-Process
+                # Opens a GUI for the Get-Process cmdlet
+
+    Get-Process
+        # Gets the processes that are running on the local computer
+
+    Get-Verb
+        # Displays a list of approved verbs that can be used in cmdlet names
+
+    Get-PSProvider
+        # Displays information about the providers that are available in the current session
+
+    Get-ChildItem env:*
+        # Lists all environment variables
+
+    Set-Item -Path Env:MyVariable -Value "MyValue"
+        # Sets an environment variable
+#endregion
+
+#region Properties
+    # Purpose: Commands to inspect and manipulate object properties and methods.
+    Get-Member
+        # Gets the properties and methods of objects
+            Get-Process | Get-Member
+                # Lists all properties and methods of the process object
+
+    Select-Object
+        # Selects specific properties of an object
+            Get-Process | Select-Object -Property Name, Id, Path
+                # Lists the name, ID, and path of all processes
+            Get-Process | Select-Object -Property Name, @{Name="MemoryMB"; Expression={$_.WorkingSet / 1MB}}
+                # Adds a calculated property to display memory usage in MB
+
+    Sort-Object
+        # Sorts objects by property values
+            Get-Process | Sort-Object -Property CPU -Descending
+                # Lists all processes sorted by CPU usage in descending order
+
+    Where-Object
+        # Filters objects based on specified criteria
+            Get-Process | Where-Object {$_.CPU -gt 100}
+                # Lists all processes using more than 100 CPU
+
+    Group-Object
+        # Groups objects by property values
+            Get-Process | Group-Object -Property Name
+                # Groups all processes by their name
+
+    Measure-Object
+        # Calculates statistics like count, sum, average, etc.
+            Get-Process | Measure-Object -Property CPU -Sum
+                # Calculates the total CPU usage of all processes
+
+    Add-Member
+        # Adds a property or method to an object
+            $process = Get-Process | Select-Object -First 1
+            $process | Add-Member -MemberType NoteProperty -Name "NewProperty" -Value "NewValue"
+                # Adds a new property called "NewProperty" with the value "NewValue" to the first process object
+#endregion
+
+#region Formatting Output
+    # Purpose: Commands to format and display output in various styles.
+    Format-List
+        # Formats the output as a list
+            Get-Process | Format-List -Property Name, Id, Path
+                # Lists the name, ID, and path of all processes in a list format
+
+    Format-Table
+        # Formats the output as a table
+            Get-Process | Format-Table -Property Name, Id, Path -AutoSize
+                # Lists the name, ID, and path of all processes in a table format with auto-sized columns
+            Get-Process | Format-Table -Property Name, @{Label="MemoryMB"; Expression={$_.WorkingSet / 1MB}}
+                # Adds a calculated column to display memory usage in MB
+
+    Out-GridView
+        # Displays the output in a grid view window
+            Get-Process | Out-GridView -Title "Processes"
+                # Displays all processes in a grid view window with the title "Processes"
+
+    Format-Wide
+        # Formats the output in a wide format
+            Get-Process | Format-Wide -Property Name -Column 3
+                # Lists the names of all processes in a wide format with 3 columns
+
+    Out-String
+        # Converts objects into strings for display
+            Get-Process | Out-String
+                # Converts the output of Get-Process into a single string
+#endregion
+
+#region Format Conversion and File Export
+    # Purpose: Commands to convert and export data to different formats like CSV, JSON, XML, etc.
+    Convert
+        ConvertTo-Csv
+            # Converts objects into a series of CSV strings
+                Get-Process | ConvertTo-Csv -NoTypeInformation | Out-File -FilePath C:\FT\Processes.csv
+
+        ConvertTo-Html
+            # Converts objects into a series of HTML strings
+                Get-Process | ConvertTo-Html | Out-File -FilePath C:\FT\Processes.html
+
+        ConvertTo-Json
+            # Converts objects into a series of JSON strings
+                Get-Process | ConvertTo-Json | Out-File -FilePath C:\FT\Processes.json
+
+        ConvertTo-Xml
+            # Converts objects into a series of XML strings
+                Get-Process | ConvertTo-Xml | Out-File -FilePath C:\FT\Processes.xml
+
+        ConvertFrom-Json
+            # Converts JSON strings back into objects
+                Get-Content -Path C:\FT\Processes.json | ConvertFrom-Json
+
+        ConvertFrom-Csv
+            # Converts CSV strings back into objects
+                Get-Content -Path C:\FT\Processes.csv | ConvertFrom-Csv
+
+    Export
+        Export-Csv
+            # Converts objects into a series of CSV strings and saves them to a file
+                Get-Process | Export-Csv -Path C:\FT\Processes.csv -NoTypeInformation
+
+        Export-Clixml
+            # Converts objects into a series of XML strings and saves them to a file
+                Get-Process | Export-Clixml -Path C:\FT\Processes.xml
+
+        Out-File
+            # Saves the output of a command to a file
+                Get-Process | Out-File -FilePath C:\FT\Processes.txt
+
+    Import
+        Import-Csv
+            # Imports CSV data into objects
+                Import-Csv -Path C:\FT\Processes.csv
+
+        Import-Clixml
+            # Imports XML data into objects
+                Import-Clixml -Path C:\FT\Processes.xml
+#endregion
+
+#region PS Modules
+    # Purpose: Commands to manage PowerShell modules and package management.
+    Get-Module
+        # Get all modules that are currently loaded in the session
+
+    Install-Module
+        # Install a module from the PowerShell Gallery
+            Install-Module -Name <ModuleName> -Scope CurrentUser -Force -AllowClobber
+
+    Update-Module
+        # Update an installed module to the latest version
+            Update-Module -Name <ModuleName>
+
+    Remove-Module
+        # Unload a module from the current session
+            Remove-Module -Name <ModuleName>
+
+    Find-Module
+        # Search for modules in the PowerShell Gallery
+            Find-Module -Name <ModuleName>
+
+    New-ModuleManifest
+        # Create a module manifest file for a module
+            New-ModuleManifest -Path "D:\VsCode\Powershell\FunctionsAndModules\Install_AppFromWeb.psd1" -RootModule "Install_AppFromWeb.psm1" -ModuleVersion "1.0" -Author "Colby Connolly" -Description "Module to install applications from the web"
+#endregion
+
+#region Common Parameters
+    # Purpose: Common parameters available in most PowerShell cmdlets.
+    -Verbose
+    # Displays detailed information about the operation being performed.
+
+    -Debug
+    # Provides debugging information during the execution of a command.
+
+    -ErrorAction
+    # Specifies how the command should respond to errors (e.g., Stop, Continue, SilentlyContinue, etc.).
+
+    -ErrorVariable
+    # Stores error messages in a specified variable for later use.
+
+    -OutVariable
+    # Stores output data in a specified variable.
+
+    -OutBuffer
+    # Specifies the number of objects to buffer before sending them through the pipeline.
+
+    -WarningAction
+    # Specifies how the command should respond to warnings (e.g., SilentlyContinue, Stop, etc.).
+
+    -WarningVariable
+    # Stores warning messages in a specified variable for later use.
+
+    -PipelineVariable
+    # Assigns the current pipeline object to a variable for use within the pipeline.
+
+    -WhatIf
+    # Simulates the execution of a command, showing what would happen without actually performing the action.
+
+    -Confirm
+    # Prompts for confirmation before executing a command that could make changes.
+#endregion
+
+#region Operators
+    # Purpose: Overview of PowerShell operators with examples.
+    ## Arithmetic Operators
+    +   # Addition
+        # Example: 5 + 3  # Result: 8
+    -   # Subtraction
+        # Example: 5 - 3  # Result: 2
+    *   # Multiplication
+        # Example: 5 * 3  # Result: 15
+    /   # Division
+        # Example: 6 / 3  # Result: 2
+    %   # Modulus (remainder)
+        # Example: 5 % 3  # Result: 2
+    ++  # Increment
+        # Example: $a = 5; $a++  # Result: $a = 6
+    --  # Decrement
+        # Example: $a = 5; $a--  # Result: $a = 4
+
+    ## Logical Operators
+    -and    # Logical AND
+        # Example: $true -and $false  # Result: $false
+    -or     # Logical OR
+        # Example: $true -or $false  # Result: $true
+    -not    # Logical NOT
+        # Example: -not $true  # Result: $false
+
+    ## Bitwise Operators
+    -band   # Bitwise AND
+        # Example: 5 -band 3  # Binary: 0101 AND 0011 → 0001 (Result: 1)
+    -bor    # Bitwise OR
+        # Example: 5 -bor 3  # Binary: 0101 OR 0011 → 0111 (Result: 7)
+    -bxor   # Bitwise XOR
+        # Example: 5 -bxor 3  # Binary: 0101 XOR 0011 → 0110 (Result: 6)
+    -bnot   # Bitwise NOT
+        # Example: -bnot 5  # Binary: 0101 → 1010 (Result: -6 in two's complement)
+    -shl    # Bitwise left shift
+        # Example: 5 -shl 1  # Binary: 0101 → 1010 (Result: 10)
+    -shr    # Bitwise right shift
+        # Example: 5 -shr 1  # Binary: 0101 → 0010 (Result: 2)
+
+    ## Comparison Operators
+    -eq     # Equal to
+        # Example: 5 -eq 5  # Result: $true
+    -ne     # Not equal to
+        # Example: 5 -ne 3  # Result: $true
+    -gt     # Greater than
+        # Example: 5 -gt 3  # Result: $true
+    -lt     # Less than
+        # Example: 5 -lt 3  # Result: $false
+    -ge     # Greater than or equal to
+        # Example: 5 -ge 5  # Result: $true
+    -le     # Less than or equal to
+        # Example: 5 -le 3  # Result: $false
+
+    ## Wildcard and Regex Operators
+    -like       # Matches a pattern (wildcards supported)
+        # Example: "PowerShell" -like "Power*"  # Result: $true
+    -notlike    # Does not match a pattern (wildcards supported)
+        # Example: "PowerShell" -notlike "Shell*"  # Result: $true
+    -match      # Matches a regular expression
+        # Example: "PowerShell" -match "Power"  # Result: $true
+    -notmatch   # Does not match a regular expression
+        # Example: "PowerShell" -notmatch "Shell"  # Result: $false
+
+    ## Collection Operators
+    -in         # Checks if a value is in a collection
+        # Example: 3 -in 1,2,3  # Result: $true
+    -notin      # Checks if a value is not in a collection
+        # Example: 4 -notin 1,2,3  # Result: $true
+    -contains   # Checks if a collection contains a specific value
+        # Example: @(1,2,3) -contains 2  # Result: $true
+    -notcontains # Checks if a collection does not contain a specific value
+        # Example: @(1,2,3) -notcontains 4  # Result: $true
+
+    ## Type Operators
+    -is     # Checks if an object is of a specific type
+        # Example: "Hello" -is [string]  # Result: $true
+    -isnot  # Checks if an object is not of a specific type
+        # Example: 5 -isnot [string]  # Result: $true
+    [type]  # Casts or converts an object to a specified type
+        # Example: [int]"123"  # Result: 123 (integer)
+
+    ## Assignment Operators
+    =   # Assigns a value to a variable
+        # Example: $a = 5  # $a is now 5
+    +=  # Adds a value to a variable (or concatenates strings)
+        # Example: $a = 5; $a += 3  # Result: $a = 8
+    -=  # Subtracts a value from a variable
+        # Example: $a = 5; $a -= 3  # Result: $a = 2
+    *=  # Multiplies a variable by a value
+        # Example: $a = 5; $a *= 3  # Result: $a = 15
+    /=  # Divides a variable by a value
+        # Example: $a = 6; $a /= 3  # Result: $a = 2
+    %=  # Calculates the modulus of a variable by a value
+        # Example: $a = 5; $a %= 3  # Result: $a = 2
+
+    ## String Operators
+    -replace    # Replaces a substring in a string
+        # Example: "Hello World" -replace "World", "PowerShell"  # Result: "Hello PowerShell"
+    -split      # Splits a string into an array
+        # Example: "a,b,c" -split ","  # Result: @("a", "b", "c")
+    -join       # Joins an array of strings into a single string
+        # Example: @("a", "b", "c") -join ","  # Result: "a,b,c"
+    -as         # Converts an object to a specified type
+        # Example: "123" -as [int]  # Result: 123 (integer)
+
+    ## Array and Hashtable Operators
+    ,   # Creates an array from a single value
+        # Example: ,5  # Result: @(5)
+    @() # Creates an array from a collection of values
+        # Example: @("a", "b", "c")  # Result: @("a", "b", "c")
+    @{} # Creates a hashtable (key-value pairs)
+        # Example: @{"Key"="Value"}  # Result: Hashtable with one key-value pair
+    +=  # Adds an element to an array or a key-value pair to a hashtable
+        # Example: $array = @(); $array += 5  # Result: @(5)
+    -=  # Removes an element from an array or a key-value pair from a hashtable
+        # Example: $array = @(1,2,3); $array -= 2  # Result: @(1,3)
+
+    ## Redirection Operators
+    >   # Redirects output to a file (overwrites)
+        # Example: "Hello" > "file.txt"
+    >>  # Redirects output to a file (appends)
+        # Example: "World" >> "file.txt"
+    2>  # Redirects error output to a file (overwrites)
+        # Example: Write-Error "Error" 2> "error.txt"
+    2>> # Redirects error output to a file (appends)
+        # Example: Write-Error "Error" 2>> "error.txt"
+    2>&1 # Redirects error output to standard output
+        # Example: Write-Error "Error" 2>&1
+
+    ## Pipeline Operators
+    |   # Passes output from one command to another
+        # Example: Get-Process | Where-Object {$_.CPU -gt 100}
+    ||  # Logical OR (short-circuiting)
+        # Example: $false || $true  # Result: $true
+    &&  # Logical AND (short-circuiting)
+        # Example: $true && $true  # Result: $true
+
+    ## Conditional Operators
+    ? : # Ternary operator (conditional expression)
+        # Example: $a = ($true ? "Yes" : "No")  # Result: $a = "Yes"
+
+    ## Range Operator
+    ..  # Creates a range of integers
+        # Example: 1..5  # Result: @(1, 2, 3, 4, 5)
+
+    ## Call Operator
+    &   # Executes a command, script, or script block
+        # Example: & "C:\Path\To\Script.ps1"
+
+    ## Unary Operators
+    +   # Unary plus (does nothing, but can be used for clarity)
+        # Example: +5  # Result: 5
+    -   # Unary minus (negates a number)
+        # Example: -5  # Result: -5
+#endregion
+
+#region Parameter Definitions and Attributes
+    # Purpose: Detailed explanation of parameter types, attributes, validation, and advanced features.
+    ## Set Parameter Type
+    [string] # A simple string in single or double quotes
+    [string[]] # An array of strings (to accept multiple values)
+    [int] # Whole numbers without decimals
+    [float] # Floating-point numbers with decimals
+    [bool] # True or False
+    [array] # Collection of values
+    [hashtable] # Collection of key-value pairs
+    [datetime] # A date-time value
+    [object] # .NET Object
+
+    ## Parameter Value Validation
+    [ValidateRange(1, 100)] # Validates a range of numbers
+    [ValidateLength(1, 10)] # Validates the lengths of a string parameter
+    [ValidatePattern("[A-Za-z]+")] # Validates values against a regular expression pattern
+    [ValidateNotNullOrEmpty()] # Ensures that a parameter is not null or empty
+    [ValidateScript({ $_ -gt 0 })] # Validates a parameter using a custom script block
+    [AllowNull()] # Allows null values
+    [AllowEmptyString()] # Allows empty strings
+    [AllowEmptyCollection()] # Allows empty collections
+
+    ## Set Parameter Attributes
+    [Parameter(Mandatory=$true)] # Parameter is required
+    [Parameter(Position=1)] # Assigns parameter position
+    [Parameter(ValueFromPipeline=$true)] # Sets the parameter to accept value from pipeline
+    [Parameter(ValueFromPipelineByPropertyName=$true)] # Accepts pipeline input by property name
+    [Parameter(ValueFromRemainingArguments=$true)] # Accepts remaining arguments
+    [Parameter(HelpMessage="Get some help")] # Provides a help message for the parameter
+
+    ## Advanced Parameter Attributes
+    [CmdletBinding()] # Enables advanced function features like -Verbose and -Debug
+    [Alias("AliasName")] # Specifies alternative names for a parameter
+    [ValidateSet("Value1", "Value2")] # Restricts the parameter to a predefined set of values
+    [ValidateCount(1, 5)] # Ensures the parameter accepts a specific number of values
+
+    ## Parameter Sets
+    # Example of defining parameter sets for mutually exclusive parameters
+    [CmdletBinding(DefaultParameterSetName="Set1")]
+    param (
+        [Parameter(ParameterSetName="Set1", Mandatory=$true)]
+        [string]$Param1,
+
+        [Parameter(ParameterSetName="Set2", Mandatory=$true)]
+        [int]$Param2
+    )
+
+    ## Default Parameter Values
+    # Example of setting default values for parameters
+    param (
+        [string]$Param1 = "DefaultValue",
+        [int]$Param2 = 10
+    )
+
+    ## Dynamic Parameters
+    # Example of creating dynamic parameters
+    DynamicParam {
+        $paramDictionary = New-Object System.Management.Automation.RuntimeDefinedParameterDictionary
+        $attributes = New-Object System.Management.Automation.ParameterAttribute
+        $attributes.Mandatory = $true
+        $attributeCollection = New-Object System.Collections.ObjectModel.Collection[System.Attribute]
+        $attributeCollection.Add($attributes)
+        $runtimeParam = New-Object System.Management.Automation.RuntimeDefinedParameter("DynamicParam", [string], $attributeCollection)
+        $paramDictionary.Add("DynamicParam", $runtimeParam)
+        return $paramDictionary
+    }
+#endregion
+
+#region Function Template
+    # Purpose: Template for creating PowerShell functions with detailed help and structure.
+    function Verb-Noun {
+        <#
+        .SYNOPSIS
+        Enter quick description here
+
+        .DESCRIPTION
+        Enter Description Here
+
+        .PARAMETER Param1
+        Description of parameter here
+
+        .EXAMPLE
+        Example here
+        Description of example here
+
+        #>
+        [CmdletBinding()]
+        param (
+            [string]$Param1,
+            [int]$Param2 = 10
+        )
+        Begin {
+            
+        }
+        Process {
+            
+        }
+        End {
+            
+        }
+    }
+#endregion
+
+#region Remote Commands
+    # Purpose: Commands for remote management and execution in PowerShell.
+    #Configuring remoting
+    Enable-PSRemoting -Force
+        # Enables PowerShell remoting on the local computer
+    #1 to 1 remoting
+    Enter-PSSession
+        # Starts an interactive session with a remote computer
+            Enter-PSSession -ComputerName "RemotePC" -Credential (Get-Credential)
+                # Prompts for credentials and connects to the remote computer
+
+    Exit-PSSession
+        # Exits the current remote session
+
+    New-PSSession
+        # Creates a persistent connection to a remote computer
+            $session = New-PSSession -ComputerName "RemotePC" -Credential (Get-Credential)
+                # Creates a new session and stores it in the $session variable
+
+    Remove-PSSession
+        # Closes a persistent session to a remote computer
+            Remove-PSSession -Session $session
+                # Closes the session stored in the $session variable
+
+    Get-PSSession
+        # Lists all active PSSessions
+
+            # Examples of using a session variable
+            Copy-Item -Path "C:\LocalFile.txt" -Destination "C:\RemoteFile.txt" -ToSession $session
+                # Copies a file to the remote session
+            Invoke-Command -Session $session -ScriptBlock { Get-Process }
+                # Runs a command in the remote session
+
+    #1 to many remoting
+    Invoke-Command
+        # Executes a command on one or more remote computers
+            Invoke-Command -ComputerName "RemotePC" -ScriptBlock { Get-Process }
+                # Runs the Get-Process cmdlet on the remote computer
+            Invoke-Command -ComputerName "RemotePC1", "RemotePC2" -ScriptBlock { Get-Service }
+                # Runs the Get-Service cmdlet on multiple remote computers
+            Invoke-Command -ComputerName "RemotePC1", "RemotePC2" -ScriptBlock { param($param1) Get-Process -Name $param1 } -ArgumentList "powershell"
+                # Runs a script block on multiple remote computers with an argument
+            Invoke-Command -ComputerName "RemotePC1", "RemotePC2" -FilePath "C:\Scripts\MyScript.ps1"
+                # Runs a script file from your local C drive on multiple remote computers
+#endregion
+
+#region Variables
+    # Purpose: Overview of variable usage in PowerShell.
+
+    ## Variable Declaration and Assignment
+    # Declare and assign values to variables.
+        $myVariable = "Hello, World!"
+        $number = 42
+
+    ## Variable Scopes
+    # Explanation of scopes like Global, Local, Script, and Private.
+        $Global:myVariable = "Global Scope"
+        $Script:myVariable = "Script Scope"
+
+    ## Automatic Variables
+    # Common automatic variables like $PSItem, $Error, $Null, $Args, etc.
+        $PSItem  # Represents the current pipeline object.
+        $Error   # Stores error objects from the most recent command.
+        $Args    # Stores unnamed arguments passed to a script or function.
+
+    ## Variable Types
+    # Specify types for variables (e.g., [int], [string], [array]).
+        [int]$number = 42
+        [string]$text = "PowerShell"
+
+    ## Variable Arrays and HashTables
+    # Working with arrays and hashtables.
+        $array = @(1, 2, 3)
+        $hashtable = @{"Key" = "Value"; "AnotherKey" = "AnotherValue"}
+
+    ## Variable Expansion in Strings
+    # How variables are expanded in double-quoted strings.
+        $name = "PowerShell"
+        Write-Output "Hello, $name!"  # Output: Hello, PowerShell!
+
+    ## Environment Variables
+    # Accessing and modifying environment variables.
+        $env:Path  # Access the PATH environment variable.
+        $env:MyVariable = "MyValue"  # Set a custom environment variable.
+
+    ##Subexpression
+    # Using subexpressions to evaluate expressions within strings.
+        $number = 5
+        Write-Output "The number is $($number * 2)"  # Output: The number is 10
+
+    ##Commands for Variable Management
+    Get-Variable
+        # Lists all variables in the current session.
+    New-variable
+        # Creates a new variable.
+            New-Variable -Name "MyVar" -Value "Hello"
+    Set-Variable
+        # Sets the value of an existing variable.
+            Set-Variable -Name "MyVar" -Value "World"
+    Remove-Variable
+        # Removes a variable from the session.
+            Remove-Variable -Name "MyVar"
+    Clear-Variable
+        # Clears the value of a variable without removing it.
+            Clear-Variable -Name "MyVar"
+#endregion
+
+#region Input and Output
+    # Purpose: Commands for handling input and output in PowerShell.
+    #Prompting for and dispolaying information
+    Read-Host
+        # Prompts the user for input and returns the entered value.
+            $input = Read-Host -Prompt "Enter your name"
+                # Prompts for a name and stores it in $input
+            Write-Output "Hello, $input!"  # Displays the entered name
+                # Output: Hello, [name]!
+    Write-Host
+        # Displays output directly to the console.
+            Write-Host "Hello, World!" -ForegroundColor Green -BackgroundColor Black
+                # Displays "Hello, World!" in green text on a black background
+    Write-Output
+        # Sends output to the pipeline (default output stream).
+            Write-Output "This is output"  # Sends the string to the pipeline
+                # Output: This is output
+    Write-Warning
+        # Displays a warning message.
+            Write-Warning "This is a warning!"  # Displays a warning message in yellow text
+                # Output: WARNING: This is a warning!
+    Write-Error
+        # Displays an error message.
+            Write-Error "This is an error!"  # Displays an error message in red text
+                # Output: ERROR: This is an error!
+    Write-Information
+        # Displays an informational message.
+            Write-Information "This is information!"  # Displays an informational message
+                # Output: This is information!
+    Write-Verbose
+        # Displays verbose output (when -Verbose is used).
+            Write-Verbose "This is verbose output" -Verbose  # Displays verbose message if -Verbose is specified
+                # Output: VERBOSE: This is verbose output
+    Write-Progress
+        # Displays a progress bar.
+            Write-Progress -Activity "Processing" -Status "In Progress" -PercentComplete 50
+                # Displays a progress bar with 50% completion
+                # Output: Progress bar in the console
+#endregion
+
+#region Regular Expressions
+    # Purpose: Overview of regular expressions in PowerShell.
+
+    ## Basic Regex Syntax
+    .   # Matches any single character
+        # Example: "a.b" matches "aXb", "a1b", etc.
+    *   # Matches zero or more occurrences of the preceding character
+        # Example: "ab*" matches "a", "ab", "abb", etc.
+    +   # Matches one or more occurrences of the preceding character
+        # Example: "ab+" matches "ab", "abb", but not "a"
+    ?   # Matches zero or one occurrence of the preceding character
+        # Example: "ab?" matches "a", "ab"
+    ^   # Anchors the match to the start of a string
+        # Example: "^abc" matches "abc" at the start of a string
+    $   # Anchors the match to the end of a string
+        # Example: "abc$" matches "abc" at the end of a string
+    []  # Matches any single character within the brackets
+        # Example: "[aeiou]" matches any vowel
+    [^] # Matches any single character not within the brackets
+        # Example: "[^aeiou]" matches any consonant
+    ()  # Groups characters or expressions
+        # Example: "(ab)+" matches "ab", "abab", etc.
+    |   # Matches either the expression before or after the operator
+        # Example: "a|b" matches "a" or "b"
+    \   # Escapes special characters
+        # Example: "\." matches a literal period
+
+    ## Quantifiers
+    {n}     # Matches exactly n occurrences
+        # Example: "a{3}" matches "aaa"
+    {n,}    # Matches n or more occurrences
+        # Example: "a{2,}" matches "aa", "aaa", etc.
+    {n,m}   # Matches between n and m occurrences
+        # Example: "a{2,4}" matches "aa", "aaa", or "aaaa"
+
+    ## Regex Operators and Methods
+    -match      # Matches a string against a regex pattern
+        # Example: "abc" -match "^a"  # Result: $true
+    -notmatch   # Does not match a string against a regex pattern
+        # Example: "abc" -notmatch "^b"  # Result: $true
+    -replace    # Replaces a substring in a string using regex
+        # Example: "abc" -replace "a", "x"  # Result: "xbc"
+    -split      # Splits a string into an array based on a regex pattern
+        # Example: "a,b,c" -split ","  # Result: @("a", "b", "c")
+
+    ## Using .NET Regex Methods
+    # PowerShell allows access to .NET's System.Text.RegularExpressions.Regex class for advanced regex operations.
+    [regex]::IsMatch("abc", "^a")
+        # Checks if the string "abc" matches the pattern "^a"
+        # Result: $true
+
+    [regex]::Match("abc123", "\d+").Value
+        # Finds the first match of one or more digits in "abc123"
+        # Result: "123"
+
+    [regex]::Matches("abc123def456", "\d+")
+        # Finds all matches of one or more digits in the string
+        # Result: Collection of matches ("123", "456")
+
+    [regex]::Replace("abc123", "\d", "X")
+        # Replaces all digits in "abc123" with "X"
+        # Result: "abcXXX"
+
+    ## Practical Examples
+    # Extract email addresses from a string
+    $text = "Contact us at support@example.com or sales@example.org"
+    $emails = [regex]::Matches($text, "\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b") | ForEach-Object { $_.Value }
+        # Result: @("support@example.com", "sales@example.org")
+
+    # Validate a phone number format
+    $phone = "123-456-7890"
+    $isValid = $phone -match "^\d{3}-\d{3}-\d{4}$"
+        # Result: $true
+
+    # Replace multiple spaces with a single space
+    $text = "This   is   a   test"
+    $cleaned = $text -replace "\s+", " "
+        # Result: "This is a test"
+#endregion
+ 
+#region Logic and Loops
+    # Purpose: Overview of logical constructs and loops in PowerShell.
+
+    ## If-Else Statements
+    if ($condition) {
+        # Code to execute if condition is true
+    } elseif ($anotherCondition) {
+        # Code to execute if another condition is true
+    } else {
+        # Code to execute if all conditions are false
+    }
+        # Example:
+        $number = 5
+        if ($number -gt 10) {
+            Write-Output "Greater than 10"
+        } elseif ($number -eq 5) {
+            Write-Output "Equal to 5"
+        } else {
+            Write-Output "Less than 10"
+        }
+
+    ## Switch Statements
+    switch ($variable) {
+        "Value1" { # Code for Value1 }
+        "Value2" { # Code for Value2 }
+        default { # Code for default case }
+    }
+        # Example:
+        $color = "Red"
+        switch ($color) {
+            "Red" { Write-Output "Stop" }
+            "Yellow" { Write-Output "Caution" }
+            "Green" { Write-Output "Go" }
+            default { Write-Output "Unknown color" }
+        }
+
+    ## For Loop
+    for ($i = 0; $i -lt 10; $i++) {
+        # Code to execute in each iteration
+    }
+        # Example:
+        for ($i = 1; $i -le 5; $i++) {
+            Write-Output "Iteration $i"
+        }
+
+    ## Foreach Loop
+    foreach ($item in $collection) {
+        # Code to execute for each item in the collection
+    }
+        # Example:
+        $numbers = @(1, 2, 3, 4, 5)
+        foreach ($num in $numbers) {
+            Write-Output "Number: $num"
+        }
+
+    ## While Loop
+    while ($condition) {
+        # Code to execute while condition is true
+    }
+        # Example:
+        $count = 1
+        while ($count -le 3) {
+            Write-Output "Count: $count"
+            $count++
+        }
+
+    ## Do-While Loop
+    do {
+        # Code to execute at least once
+    } while ($condition)
+        # Example:
+        $count = 1
+        do {
+            Write-Output "Count: $count"
+            $count++
+        } while ($count -le 3)
+
+    ## Do-Until Loop
+    do {
+        # Code to execute at least once
+    } until ($condition)
+        # Example:
+        $count = 1
+        do {
+            Write-Output "Count: $count"
+            $count++
+        } until ($count -gt 3)
+
+    ## Break and Continue
+    # Break: Exits the loop or switch statement.
+    # Continue: Skips the current iteration and moves to the next.
+        # Example:
+        foreach ($num in 1..5) {
+            if ($num -eq 3) { break }  # Exits the loop when $num is 3
+            Write-Output "Number: $num"
+        }
+
+        foreach ($num in 1..5) {
+            if ($num -eq 3) { continue }  # Skips the iteration when $num is 3
+            Write-Output "Number: $num"
+        }
+#endregion
+
+#region Error Handling
+    # Purpose: Overview of error handling in PowerShell.
+
+    ## Try-Catch-Finally Blocks
+    try {
+        # Code that may throw an exception
+    } catch {
+        # Code to handle the exception
+    } finally {
+        # Code that always runs, regardless of success or failure
+    }
+        # Example:
+        try {
+            $result = 10 / 0  # This will throw a divide by zero exception
+        } catch {
+            Write-Output "An error occurred: $_"  # Displays the error message
+        } finally {
+            Write-Output "This block always runs."  # Always executed
+        }
+
+    ## Throwing Exceptions
+    throw "This is an error message"  # Throws a terminating error
+        # Example:
+        function Test-Throw {
+            Write-Output "Before throw"
+            throw "An error occurred"
+            Write-Output "After throw"  # This line will not execute
+        }
+
+    ## ErrorAction Parameter
+    # Controls how cmdlets handle non-terminating errors.
+        Get-Process -Name "NonExistentProcess" -ErrorAction SilentlyContinue  # Suppresses error messages
+        Get-Process -Name "NonExistentProcess" -ErrorAction Stop  # Converts non-terminating errors to terminating errors
+
+    ## ErrorAction Values
+        Break  # Exits the loop or switch statement
+        Continue  # Skips the current iteration and moves to the next one
+        Return  # Exits the function and returns a value
+        Throw  # Throws an exception and stops execution
+        Trap  # Defines a block of code to handle errors in a specific scope
+        Suspend  # Suspends the current operation and allows for resuming later
+        Resume  # Resumes a suspended operation
+        Inquire  # Prompts the user for input during error handling
+        Ignore  # Ignores the error and continues execution
+
+    ## Error Variable
+    # Captures errors in a specified variable.
+        $errorVariable = $null  # Initialize the variable to store errors
+        Get-Process -Name "NonExistentProcess" -ErrorVariable errorVariable  # Stores errors in the variable
+        Write-Output "Captured Error: $errorVariable"
+
+    ## $Error Automatic Variable
+    # Stores a collection of all errors in the current session.
+        Get-Process -Name "NonExistentProcess" -ErrorAction SilentlyContinue
+        Write-Output "Most Recent Error: $Error[0]"  # Displays the most recent error
+        $Error.Clear()  # Clears the error history
+
+    ## Using Multiple Catch Blocks
+    # Handle specific exceptions with multiple catch blocks.
+        try {
+            $result = 10 / 0
+        } catch [DivideByZeroException] {
+            Write-Output "Divide by zero error: $_"
+        } catch {
+            Write-Output "General error: $_"
+        }
+
+    ## Using Finally for Cleanup
+    # The `finally` block is useful for cleanup tasks.
+        try {
+            $file = [System.IO.File]::Open("C:\Temp\NonExistentFile.txt", 'Open')
+        } catch {
+            Write-Output "An error occurred: $_"
+        } finally {
+            Write-Output "Cleaning up resources."
+        }
+
+    ## Non-Terminating vs. Terminating Errors
+    # Non-terminating errors allow the script to continue execution.
+        Get-Process -Name "NonExistentProcess"  # Non-terminating error
+        Write-Output "Script continues after non-terminating error."
+
+    # Terminating errors stop execution unless handled.
+        try {
+            throw "This is a terminating error"
+        } catch {
+            Write-Output "Caught the terminating error: $_"
+        }
+
+    ## Using `$?` to Check Command Success
+    # `$?` indicates whether the last command succeeded.
+        Get-Process -Name "NonExistentProcess" -ErrorAction SilentlyContinue
+        if ($?) {
+            Write-Output "Command succeeded."
+        } else {
+            Write-Output "Command failed."
+        }
+
+    ## Using `$LASTEXITCODE`
+    # `$LASTEXITCODE` captures the exit code of the last external program.
+        ping localhost
+        Write-Output "Last exit code: $LASTEXITCODE"
+#endregion
+
+#region Scripting Best Practices
+    # Purpose: Overview of best practices for writing PowerShell scripts.
+
+    ## Use Meaningful Names
+    # Use descriptive names for variables, functions, and parameters.
+        $userName = "JohnDoe"  # Descriptive variable name
+
+    ## Comment Your Code
+    # Add comments to explain complex logic or important sections.
+        # This function calculates the factorial of a number
+        function Get-Factorial {
+            param ($number)
+            # Calculate factorial using recursion
+            if ($number -le 1) { return 1 }
+            return $number * (Get-Factorial($number - 1))
+        }
+
+    ## Use CmdletBinding for Advanced Functions
+    # Use `[CmdletBinding()]` to enable advanced features like -Verbose and -Debug.
+        [CmdletBinding()]
+        function Get-ProcessInfo {
+            param ($processName)
+            Get-Process -Name $processName
+        }
+
+    ## Validate Parameters
+    # Use parameter validation attributes to ensure correct input.
+        param (
+            [Parameter(Mandatory=$true)]
+            [ValidateNotNullOrEmpty()]
+            [string]$FilePath
+        )
+
+    ## Error Handling
+    # Implement error handling using try-catch-finally blocks.
+        try {
+            $fileContent = Get-Content -Path $FilePath
+        } catch {
+            Write-Error "Failed to read file: $_"
+        } finally {
+            Write-Output "Cleanup actions here."
+        }
+
+    ## Avoid Using Global Variables
+    # Limit the use of global variables to avoid conflicts and maintain encapsulation.
+
+    ## Use Functions for Reusable Code
+    # Break down your script into functions for better organization and reusability.
+#endregion

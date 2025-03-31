@@ -1,55 +1,74 @@
-Function Find-FilesByContent
-{
+Function Find-FilesByContent {
     <#
     .SYNOPSIS
-    Search the computer for files containing specified content
-    
+    Search the computer for files containing specified content.
+
     .DESCRIPTION
-    Search the computer for files containing specified content
-    
-    .PARAMETER StringToFind,
+    This function searches the computer for files containing specified content. 
+    It can filter files by type and size.
+
+    .PARAMETER StringToFind
+    Specifies the string to search for within the files.
+
     .PARAMETER SearchAllDrives
+    Indicates whether to search all drives on the system.
+
     .PARAMETER FileTypeToSearch
-    .PARAMETER MaxSizeForRansomNoteInKB
+    Specifies the file type to search, such as `.txt` or `.log`.
+
+    .PARAMETER CheckThisDisk
+    Specifies the drive to search if not searching all drives.
+
+    .PARAMETER MaxFileSizeToSearchInKB
+    Specifies the maximum file size (in KB) to include in the search.
 
     .EXAMPLE
-    Find-FilesByContent -StringToFind "Find This Note" -SearchAllDrives
-    Search the entire computer for .txt files that are 100KB or smaller containing the text "Find This Note"
+    Find-FilesByContent -StringToFind "Error" -SearchAllDrives
+    Searches all drives for .txt files smaller than 100KB containing the text "Error".
 
     .EXAMPLE
-    Find-FilesByContent -StringToFind "Find This Note" -FileTypeToSearch ".pdf" -CheckThisDisk "F:\" -MaxFileSizeToSearchInKB 500
-    Search the F: drive for .pdf files that are 500KB or smaller containing the text "Find This Note"
+    Find-FilesByContent -StringToFind "Important" -FileTypeToSearch ".log" -CheckThisDisk "E:\" -MaxFileSizeToSearchInKB 500
+    Searches the E: drive for .log files smaller than 500KB containing the text "Important".
 
     .EXAMPLE
-    Find-FilesByContent -StringToFind "Find This Note"
-    Search the C:\ drive for .txt files that are 100KB or smaller containing the text "Find This Note"
-
+    Find-FilesByContent -StringToFind "TODO"
+    Searches the system drive for .txt files smaller than 100KB containing the text "TODO".
     #>
     [CmdletBinding()]
-    Param
-    (
-        [parameter(ValueFromPipeline=$True)]
+    Param (
+        [Parameter(ValueFromPipeline=$True, Mandatory=$true)]
         [String]$StringToFind,
         [switch]$SearchAllDrives,
-        [String]$FileTypeToSearch=".txt",
-        [String]$CheckThisDisk="C:\",
-        [int]$MaxFileSizeToSearchInKB=100
+        [String]$FileTypeToSearch = ".txt",
+        [String]$CheckThisDisk = "$env:SystemDrive",
+        [int]$MaxFileSizeToSearchInKB = 100
     )
-    BEGIN
-    {
-        if ($SearchAllDrives) {
-            Write-Host -f Green "Gathering all" $FileTypeToSearch "Files on all drives."
-            <#Get-PSDrive -PSProvider "FileSystem" |  ForEach-Object {Write-Host -f Green "Gathering from:" $_.Root}#>
-            $FilesToCheck=Get-PSDrive -PSProvider "FileSystem" |  ForEach-Object {Write-Host -f Green "Gathering from:" $_.Root; Get-ChildItem $_.Root -Force -ErrorAction SilentlyContinue -r -filter *"$FileTypeToSearch"}
-        }
-        else {
-            Write-Host -f Green "Gathering all" $FileTypeToSearch "Files on" $CheckThisDisk
-            $FilesToCheck=Get-PSDrive -PSProvider "FileSystem" |  ForEach-Object {Get-ChildItem "$CheckThisDisk" -Force -ErrorAction SilentlyContinue -r -filter *"$FileTypeToSearch"}
+    BEGIN {
+        Write-Host -f Green "Initializing file search operation."
+        $FoundFiles = @()
+        $FilesToCheck = @()
+    }
+    PROCESS {
+        try {
+            if ($SearchAllDrives) {
+                Write-Host -f Green "Gathering all $FileTypeToSearch files on all drives."
+                $FilesToCheck = Get-PSDrive -PSProvider "FileSystem" | ForEach-Object {
+                    Write-Host -f Green "Gathering from:" $_.Root
+                    Get-ChildItem $_.Root -Force -ErrorAction SilentlyContinue -Recurse -Filter *"$FileTypeToSearch"
+                }
+            } else {
+                Write-Host -f Green "Gathering all $FileTypeToSearch files on $CheckThisDisk."
+                $FilesToCheck = Get-ChildItem $CheckThisDisk -Force -ErrorAction SilentlyContinue -Recurse -Filter *"$FileTypeToSearch"
+            }
+
+            Write-Host -f Green "Searching gathered files for: $StringToFind"
+            $FoundFiles += $FilesToCheck | Where-Object { ($_.Length / 1KB) -lt $MaxFileSizeToSearchInKB } | Select-String "$StringToFind" -ErrorAction SilentlyContinue
+        } catch {
+            Write-Host -f Red "An error occurred during the file content search: $_"
         }
     }
-    PROCESS
-    {
-        Write-Host -f Green "Searching gathered files for: " $StringToFind
-        $FilesToCheck | Where-Object {($_.Length / 1kb) -lt $MaxFileSizeToSearchInKB} | Select-String "$StringToFind" -ErrorAction SilentlyContinue
+    END {
+        Write-Host -f Green "File search operation completed."
+        return $FoundFiles
     }
 }

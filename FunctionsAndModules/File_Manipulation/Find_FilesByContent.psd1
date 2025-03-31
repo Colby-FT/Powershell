@@ -12,7 +12,7 @@
 RootModule = 'FindFilesByContent.psm1'
 
 # Version number of this module.
-ModuleVersion = '1.0'
+ModuleVersion = '2.0'
 
 # Supported PSEditions
 # CompatiblePSEditions = @()
@@ -30,7 +30,7 @@ CompanyName = 'Unknown'
 Copyright = '(c) Colby. All rights reserved.'
 
 # Description of the functionality provided by this module
-Description = 'Search the computer for files containing a string'
+Description = 'This function searches the computer for files containing specified content. It can filter files by type and size.'
 
 # Minimum version of the PowerShell engine required by this module
 # PowerShellVersion = ''

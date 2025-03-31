@@ -12,7 +12,7 @@
 # RootModule = ''
 
 # Version number of this module.
-ModuleVersion = '1.01'
+ModuleVersion = '2.0'
 
 # Supported PSEditions
 # CompatiblePSEditions = @()
@@ -107,7 +107,7 @@ PrivateData = @{
         # IconUri = ''
 
         # ReleaseNotes of this module
-        ReleaseNotes = 'Added Module Find_FilesByContent'
+        ReleaseNotes = 'Added the ability to search one drive or all drives to each of the functions. Added parameter validation to all functions. Added error handling to all functions.'
 
         # Prerelease string of this module
         # Prerelease = ''
