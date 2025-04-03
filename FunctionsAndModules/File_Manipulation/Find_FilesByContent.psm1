@@ -40,7 +40,8 @@ Function Find-FilesByContent {
         [String]$StringToFind,
         [switch]$SearchAllDrives,
         [String]$FileTypeToSearch = ".txt",
-        [String]$CheckThisDisk = "$env:SystemDrive",
+        [ValidatePattern("^[A-Za-z]:\\$")]
+        [String]$CheckThisDisk = "$env:SystemDrive\",
         [int]$MaxFileSizeToSearchInKB = 100
     )
     BEGIN {
@@ -54,11 +55,11 @@ Function Find-FilesByContent {
                 Write-Host -f Green "Gathering all $FileTypeToSearch files on all drives."
                 $FilesToCheck = Get-PSDrive -PSProvider "FileSystem" | ForEach-Object {
                     Write-Host -f Green "Gathering from:" $_.Root
-                    Get-ChildItem $_.Root -Force -ErrorAction SilentlyContinue -Recurse -Filter *"$FileTypeToSearch"
+                    Get-ChildItem $_.Root -Force -ErrorAction SilentlyContinue -Recurse -Filter "*$FileTypeToSearch"
                 }
             } else {
                 Write-Host -f Green "Gathering all $FileTypeToSearch files on $CheckThisDisk."
-                $FilesToCheck = Get-ChildItem $CheckThisDisk -Force -ErrorAction SilentlyContinue -Recurse -Filter *"$FileTypeToSearch"
+                $FilesToCheck = Get-ChildItem -Path $CheckThisDisk -Force -ErrorAction SilentlyContinue -Recurse -Filter "*$FileTypeToSearch"
             }
 
             Write-Host -f Green "Searching gathered files for: $StringToFind"
