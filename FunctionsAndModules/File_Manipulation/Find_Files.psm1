@@ -33,7 +33,8 @@ Function Find-Files {
         [Parameter(ValueFromPipeline=$True, Mandatory=$true)]
         [String]$FilesToFind,
         [switch]$SearchAllDrives,
-        [String]$CheckThisDisk = "$env:SystemDrive"
+        [ValidatePattern("^[A-Za-z]:\\$")]
+        [String]$CheckThisDisk = "$env:SystemDrive\"
     )
     BEGIN {
         Write-Host -f Green "Initializing file count operation."

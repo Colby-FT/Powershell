@@ -1,0 +1,70 @@
+########################################################################################
+#Parameter validation and cleanup
+if ([string]::IsNullOrEmpty($env:usrEventLevel)) {
+    $env:usrLogName = "*"
+}
+
+$EventIDnumber = if($env:usrEventID -notmatch "^\d+$") {
+    Write-Host "Bad value. Please enter a positive integer"
+    exit 1
+}
+else{
+    [int]$env:usrEventID;
+}
+
+if ([string]::IsNullOrEmpty($env:usrStartDate)) {
+    $env:usrStartDate = (Get-Date).AddDays(-1)
+}
+
+if ([string]::IsNullOrEmpty($env:usrEndDate)) {
+    $env:usrEndDate = (Get-Date)
+}
+
+if ([string]::IsNullOrEmpty($env:usrLogName)) {
+    $env:usrLogName = "*"
+}
+
+##Do the thing
+$OutputValue = Get-EventLogByTimeRange -LogName $env:usrLogName -StartDate $env:usrStartDate -EndDate $env:usrEndDate -Level $env:usrEventLevel -EventID $EventIDnumber
+
+##Output to either UDF or standard out
+if($env:OutputToUDF){
+    if($OutputValue){
+        New-ItemProperty -Path HKLM:\SOFTWARE\Centrastage -Name "Custom$env:UDFNumber" -PropertyType String -Value "$OutputValue" -Force | out-null;
+    }
+    else{
+        Write-host "Nothing found"
+        return
+    }
+}
+else{
+    Return $OutputValue
+}
+
+
+########################################################################################
+##Find the files
+if($env:SearchAll){
+    $OutputValue = Find-Files -FilesToFind $env:FindTheseFiles -SearchAllDrives -NewExtension 
+}
+else{
+    if($env:DriveToSearch){
+        $OutputValue = Find-Files -FilesToFind $env:FindTheseFiles -CheckThisDisk $env:DriveToSearch
+    }
+    else{
+        $OutputValue = Find-Files -FilesToFind $env:FindTheseFiles
+    }
+}
+##Output to either UDF or standard out
+if($env:OutputToUDF){
+    if($OutputValue){
+        New-ItemProperty -Path HKLM:\SOFTWARE\Centrastage -Name "Custom$env:UDFNumber" -PropertyType String -Value "$OutputValue" -Force | out-null;
+    }
+    else{
+        Write-host "Nothing found"
+        return
+    }
+}
+else{
+    return $OutputValue
+}

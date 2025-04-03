@@ -30,7 +30,8 @@ Function Remove-Files {
     [CmdletBinding()]
     Param (
         [switch]$SearchAllDrives,
-        [String]$CheckThisDisk = "$env:SystemDrive",
+        [ValidatePattern("^[A-Za-z]:\\$")]
+        [String]$CheckThisDisk = "$env:SystemDrive\",
         [Parameter(ValueFromPipeline=$True, Mandatory=$true)]
         [String]$FilesToDelete
     )
@@ -65,6 +66,7 @@ Function Remove-Files {
             Write-Host -f Yellow "No files were removed."
         } else {
             Write-Host -f Green $Files.Count " files removed successfully."
+            Write-Verbose "The following files were removed: $Files"
         }
     }
 }

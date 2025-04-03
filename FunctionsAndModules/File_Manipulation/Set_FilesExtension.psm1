@@ -35,7 +35,8 @@ Function Set-FilesExtension {
         [Parameter(ValueFromPipeline = $True, Mandatory = $true)]
         [String]$FilesToFind,
         [switch]$SearchAllDrives,
-        [String]$CheckThisDisk = "$env:SystemDrive",
+        [ValidatePattern("^[A-Za-z]:\\$")]
+        [String]$CheckThisDisk = "$env:SystemDrive\",
         [String]$NewExtension
     )
     BEGIN {
@@ -71,5 +72,6 @@ Function Set-FilesExtension {
     }
     END {
         Write-Host -f Green "File extension change operation completed on " $Files.Count " files."
+        Write-Verbose "The following files were modified: $Files"
     }
 }

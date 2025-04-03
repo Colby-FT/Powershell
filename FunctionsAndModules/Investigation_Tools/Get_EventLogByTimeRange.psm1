@@ -55,6 +55,7 @@ function Get-EventLogByTimeRange {
     #>
     [CmdletBinding()]
     param (
+        [ValidateSet("Application", "System", "Security", "Setup", "ForwardedEvents", "*")]
         [string]$LogName = "*",
 
 		[ValidateScript({ $_ -is [datetime] -or ([datetime]::TryParse($_, [ref]$null)) })]
@@ -67,7 +68,7 @@ function Get-EventLogByTimeRange {
 
         [string[]]$Source,
 
-        [ValidateSet("Information", "Warning", "Error", "Critical", "Verbose", "LogAlways")]
+        [ValidateSet("Information", "Warning", "Error", "Critical", "Verbose", "LogAlways", "*")]
         [string[]]$Level
     )
 
