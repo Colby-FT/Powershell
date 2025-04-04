@@ -1,4 +1,4 @@
-function Set-ServiceConfig{
+function Set-ServiceConfig {
     <#
 	.SYNOPSIS
 	Change service settings
@@ -29,48 +29,44 @@ function Set-ServiceConfig{
     [CmdletBinding()]
     param
     (
-        [string[]] [Parameter(ValueFromPipeline=$True)] $ServiceName,
+        [Parameter(ValueFromPipeline=$True, ValueFromPipelineByPropertyName=$True)] 
+        [string[]] $ServiceName,
+        [ValidateSet("restart", "noaction", "reboot", IgnoreCase=$True)]
         [string]$Recover = "restart",
+        [ValidateSet("start", "stop", IgnoreCase=$True)]
         [string]$Status = "start",
+        [ValidateSet("automatic", "manual", "disabled", IgnoreCase=$True)]
         [string]$Startup = "automatic"
     )
-    BEGIN
-    {
-        IF($Recover = "restart")
-        {
+    BEGIN {
+        if ($Recover -eq "restart") {
             $resetCounter = 4000
             $action = "restart"+"/"+30000+"/"+"restart"+"/"+30000+"/"+"restart"+"/"+30000
         }
-        ElseIf($Recover = "noaction")
-        {
+        elseif ($Recover -eq "noaction") {
             $resetCounter = 4000
             $action = '//////'
         }
-        ElseIf($Recover = "reboot")
-        {
+        elseif ($Recover -eq "reboot") {
             $resetCounter = 4000
             $action = "reboot"+"/"+30000
         }
-        else 
-        {
+        else {
             Write-Information 'Please set -Recover to "restart", "noaction", or "reboot"'
-            Break
+            return
         }
     }
-    PROCESS
-    {
-        foreach ($service in $ServiceName)
-        {
+    PROCESS {
+        foreach ($service in $ServiceName) {
             Set-Service -Name $($service) -StartupType $($Startup)
             sc.exe failure $($service) actions= $action reset= $resetCounter
-            If($Status = "start")
-            {
+            if ($Status -eq "start") {
                 Start-Service -Name $($service)
             }
-            ElseIf($Status = "stop")
-            {
+            elseif ($Status -eq "stop") {
                 Stop-Service -Name $($service)
             }
+            Write-Verbose "The service $($service) has been set to $($Startup) with recovery action $($Recover) and status $($Status)."
         }
     }
 }
