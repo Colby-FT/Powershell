@@ -39,9 +39,10 @@ function Set-ServiceConfig {
         [string]$Startup = "automatic"
     )
     BEGIN {
+        $PauseTimeMilliSeconds = 30000
         if ($Recover -eq "restart") {
             $resetCounter = 4000
-            $action = "restart"+"/"+30000+"/"+"restart"+"/"+30000+"/"+"restart"+"/"+30000
+            $action = "restart"+"/"+$PauseTimeMilliSeconds+"/"+"restart"+"/"+$PauseTimeMilliSeconds+"/"+"restart"+"/"+$PauseTimeMilliSeconds
         }
         elseif ($Recover -eq "noaction") {
             $resetCounter = 4000
@@ -49,7 +50,7 @@ function Set-ServiceConfig {
         }
         elseif ($Recover -eq "reboot") {
             $resetCounter = 4000
-            $action = "reboot"+"/"+30000
+            $action = "reboot"+"/"+$PauseTimeMilliSeconds
         }
         else {
             Write-Information 'Please set -Recover to "restart", "noaction", or "reboot"'

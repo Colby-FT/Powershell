@@ -45,7 +45,7 @@ else{
 ########################################################################################
 ##Find the files
 if($env:SearchAll){
-    $OutputValue = Find-Files -FilesToFind $env:FindTheseFiles -SearchAllDrives -NewExtension 
+    $OutputValue = Find-Files -FilesToFind $env:FindTheseFiles -SearchAllDrives 
 }
 else{
     if($env:DriveToSearch){
@@ -56,9 +56,10 @@ else{
     }
 }
 ##Output to either UDF or standard out
-if($env:OutputToUDF){
+if($env:OutputToUDF -eq 'true'){
     if($OutputValue){
-        New-ItemProperty -Path HKLM:\SOFTWARE\Centrastage -Name "Custom$env:UDFNumber" -PropertyType String -Value "$OutputValue" -Force | out-null;
+        New-ItemProperty -Path HKLM:\SOFTWARE\Centrastage -Name "Custom$env:UDFNumber" -PropertyType String -Value "The count of the files found is $($OutPutValue.count). See the job output for the list of file names." -Force | out-null;
+        Write-Host $OutputValue
     }
     else{
         Write-host "Nothing found"
@@ -66,5 +67,5 @@ if($env:OutputToUDF){
     }
 }
 else{
-    return $OutputValue
+    Write-Host $OutputValue
 }
