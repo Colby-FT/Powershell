@@ -4,14 +4,25 @@ function Uninstall-WithUninstallString {
     Uninstall an application using the uninstall string from the registry
     
     .DESCRIPTION
-    Searches the registry for an uninstall string for the specified app. Cleans up the uninstall string and adds silent flags. Then uninstalls the app
-    
+    Searches the registry for an uninstall string for the specified app. Cleans up the uninstall string and adds silent flags. Then uninstalls the app.
+    If multiple matches are found for the specified app name, the function will attempt to uninstall each matching application one at a time.
+
     .PARAMETER AppName
 
     .EXAMPLE
     Uninstall-WithUninstallString -AppName "TeamViewer"
     Uninstalls TeamViewer
 
+    .EXAMPLE
+    Uninstall-WithUninstallString -AppName "Adobe"
+    Uninstalls all applications with "Adobe" in the name. This may include Adobe Acrobat, Adobe Reader, etc.
+
+    .EXAMPLE
+    Uninstall-WithUninstallString -AppName "Adobe Acrobat Reader"
+    Uninstalls Adobe Acrobat Reader
+
+    .NOTES
+    Be careful providing partial application names. If multiple applications match the provided AppName, the function will process each uninstall string individually and attempt to uninstall all matching applications.
     #>
     [CmdletBinding()]
     param (
