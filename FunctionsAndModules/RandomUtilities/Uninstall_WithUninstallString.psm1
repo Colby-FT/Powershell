@@ -38,8 +38,34 @@ function Uninstall-WithUninstallString {
                                         Write-Output "Running: msiexec.exe $UninstallString"
                                         Start-Process -FilePath msiexec.exe -ArgumentList $UninstallString -Wait
                                     } else {
-                                        Write-Output "Running: $UninstallString /S"
-                                        Start-Process -FilePath $UninstallString -ArgumentList "/S" -Wait
+                                        $SilentFlags = @("/S", "/quiet", "/qn", "/silent")
+                                        $SilentSuccess = $false
+                                        foreach ($Flag in $SilentFlags) {
+                                            Write-Output "Trying: $UninstallString $Flag"
+                                            try {
+                                                $Process = Start-Process -FilePath $UninstallString -ArgumentList $Flag -ErrorAction Stop -PassThru
+                                                $Timeout = 300 # Timeout in seconds (5 minutes)
+                                                $Elapsed = 0
+                                                while (-not $Process.HasExited -and $Elapsed -lt $Timeout) {
+                                                    Start-Sleep -Seconds 1
+                                                    $Elapsed++
+                                                }
+                                                if (-not $Process.HasExited) {
+                                                    Write-Output "Process exceeded timeout. Terminating process."
+                                                    $Process.Kill()
+                                                    Write-Output "Silent flag $Flag caused the process to hang and was terminated. Trying next flag."
+                                                    continue
+                                                }
+                                                Write-Output "Silent uninstallation process completed for $AppName using flag: $Flag."
+                                                $SilentSuccess = $true
+                                                break
+                                            } catch {
+                                                Write-Output "Silent flag $Flag failed: $_"
+                                            }
+                                        }
+                                        if (-not $SilentSuccess) {
+                                            Write-Output "Common silent uninstall flags did not work. Please try uninstalling interactively."
+                                        }
                                     }
                                     Write-Output "Silent uninstallation process completed for $AppName."
                                 } catch {
