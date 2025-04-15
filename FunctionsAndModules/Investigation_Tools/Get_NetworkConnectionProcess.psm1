@@ -1,14 +1,19 @@
 function Get-NetworkConnectionProcess {
     <#
     .SYNOPSIS
-    Get-NetworkConnections retrieves network connections for specified IP addresses.
+    Retrieves active and optionally attempted network connections for specified IP addresses, along with associated process details.
 
     .DESCRIPTION
-    This function retrieves network connections for specified IP addresses. It uses the Get-NetTCPConnection cmdlet to get TCP connections and filters them based on the provided IP addresses. For each connection, it retrieves the owning process information using Get-Process.
-    The output includes local and remote addresses, ports, connection state, process name, and process ID.
+    This function retrieves active network connections for specified IP addresses using the Get-NetTCPConnection cmdlet. 
+    It also retrieves the owning process information for each connection. Optionally, it can include attempted connections 
+    by analyzing the Windows Security Event Log for relevant events. The output includes details such as local and remote 
+    addresses, ports, connection state, process name, and process ID.
 
     .PARAMETER IPAddresses
-    Enter an IP address or a list of IP addresses to check for network connections.
+    Enter one or more IP addresses to check for network connections.
+
+    .PARAMETER IncludeAttemptedConnections
+    If specified, retrieves attempted network connections from the Windows Security Event Log in addition to active connections.
 
     .OUTPUTS
     PSCustomObject
@@ -23,14 +28,16 @@ function Get-NetworkConnectionProcess {
     Retrieves network connection details for a single IP address.
 
     .EXAMPLE
-    $results = Get-NetworkConnectionProcess -IPAddresses "192.34.22.62"
-    Write-Output $results | Export-Csv -Path "connections.csv" -NoTypeInformation
-    Export the results to a CSV file.
+    Get-NetworkConnectionProcess -IPAddresses "192.34.22.62" -IncludeAttemptedConnections
+    Retrieves network connection details for a single IP address and includes attempted connections.
     #>
     [CmdletBinding()]
     param (
         [Parameter(Mandatory = $true)]
-        [string[]]$IPAddresses
+        [string[]]$IPAddresses,
+
+        [Parameter(Mandatory = $false)]
+        [switch]$IncludeAttemptedConnections
     )
     Begin {
         [OutputType([PSCustomObject])]
@@ -59,6 +66,34 @@ function Get-NetworkConnectionProcess {
                     }
                 } catch {
                     Write-Warning "Failed to retrieve process for connection with RemoteAddress: $IPAddress"
+                }
+            }
+        }
+
+        if ($IncludeAttemptedConnections) {
+            foreach ($IPAddress in $IPAddresses) {
+                try {
+                    $events = Get-WinEvent -LogName Security -FilterXPath "*[System[EventID=5156]]" -ErrorAction Stop |
+                              Where-Object { $_.Message -match $IPAddress }
+
+                    foreach ($event in $events) {
+                        $localAddress = if ($event.Message -match 'Source Address:\s+(\S+)') { $matches[1] } else { $null }
+                        $localPort = if ($event.Message -match 'Source Port:\s+(\d+)') { $matches[1] } else { $null }
+                        $remoteAddress = if ($event.Message -match 'Destination Address:\s+(\S+)') { $matches[1] } else { $null }
+                        $remotePort = if ($event.Message -match 'Destination Port:\s+(\d+)') { $matches[1] } else { $null }
+
+                        $results += [PSCustomObject]@{
+                            LocalAddress  = $localAddress
+                            LocalPort     = $localPort
+                            RemoteAddress = $remoteAddress
+                            RemotePort    = $remotePort
+                            State         = "Attempted"
+                            ProcessName   = "N/A"
+                            ProcessId     = "N/A"
+                        }
+                    }
+                } catch {
+                    Write-Warning "Failed to retrieve attempted connections for IP address: $IPAddress"
                 }
             }
         }
