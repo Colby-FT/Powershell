@@ -34,3 +34,15 @@
 ##ScriptsAndApplets
 (new-object Net.WebClient).DownloadString("https://raw.githubusercontent.com/Colby-FT/Powershell/refs/heads/main/ScriptsAndApplets/EnableBitlocker.ps1") | Invoke-Expression
 (new-object Net.WebClient).DownloadString("https://raw.githubusercontent.com/Colby-FT/Powershell/refs/heads/main/ScriptsAndApplets/ADToolKit.ps1") | Invoke-Expression
+
+
+## Block to get the latest version of the function from GitHub, and if it fails, declare the offline version of the function.
+$SourceURL = "https://raw.githubusercontent.com/Colby-FT/Powershell/main/FunctionsAndModules/RandomUtilities/Install_AppFromWeb.psm1"
+try {
+    (new-object Net.WebClient).DownloadString($SourceURL) | Invoke-Expression
+    write-host "Function has been declared successfully."
+}
+catch {
+    Write-Host "URL is not reachable. Declaring offline version of function. This may not be the newest version. For best results, please make sure the device has internet access."
+    # Declare the offline version of the function here
+}
