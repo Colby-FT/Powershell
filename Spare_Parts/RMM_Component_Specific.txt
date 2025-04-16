@@ -1,71 +1,81 @@
-########################################################################################
-#Parameter validation and cleanup
-if ([string]::IsNullOrEmpty($env:usrEventLevel)) {
-    $env:usrLogName = "*"
-}
+##################Parameter validation and cleanup##################
+    if ([string]::IsNullOrEmpty($env:usrEventLevel)) {
+        $env:usrLogName = "*"
+    }
 
-$EventIDnumber = if($env:usrEventID -notmatch "^\d+$") {
-    Write-Host "Bad value. Please enter a positive integer"
-    exit 1
-}
-else{
-    [int]$env:usrEventID;
-}
-
-if ([string]::IsNullOrEmpty($env:usrStartDate)) {
-    $env:usrStartDate = (Get-Date).AddDays(-1)
-}
-
-if ([string]::IsNullOrEmpty($env:usrEndDate)) {
-    $env:usrEndDate = (Get-Date)
-}
-
-if ([string]::IsNullOrEmpty($env:usrLogName)) {
-    $env:usrLogName = "*"
-}
-
-##Do the thing
-$OutputValue = Get-EventLogByTimeRange -LogName $env:usrLogName -StartDate $env:usrStartDate -EndDate $env:usrEndDate -Level $env:usrEventLevel -EventID $EventIDnumber
-
-##Output to either UDF or standard out
-if($env:OutputToUDF){
-    if($OutputValue){
-        New-ItemProperty -Path HKLM:\SOFTWARE\Centrastage -Name "Custom$env:UDFNumber" -PropertyType String -Value "$OutputValue" -Force | out-null;
+    $EventIDnumber = if($env:usrEventID -notmatch "^\d+$") {
+        Write-Host "Bad value. Please enter a positive integer"
+        exit 1
     }
     else{
-        Write-host "Nothing found"
-        return
+        [int]$env:usrEventID;
     }
-}
-else{
-    Return $OutputValue
-}
 
+    if ([string]::IsNullOrEmpty($env:usrStartDate)) {
+        $env:usrStartDate = (Get-Date).AddDays(-1)
+    }
 
-########################################################################################
-##Find the files
-if($env:SearchAll){
-    $OutputValue = Find-Files -FilesToFind $env:FindTheseFiles -SearchAllDrives 
-}
-else{
-    if($env:DriveToSearch){
-        $OutputValue = Find-Files -FilesToFind $env:FindTheseFiles -CheckThisDisk $env:DriveToSearch
+    if ([string]::IsNullOrEmpty($env:usrEndDate)) {
+        $env:usrEndDate = (Get-Date)
+    }
+
+    if ([string]::IsNullOrEmpty($env:usrLogName)) {
+        $env:usrLogName = "*"
+    }
+
+    ##Do the thing
+    $OutputValue = Get-EventLogByTimeRange -LogName $env:usrLogName -StartDate $env:usrStartDate -EndDate $env:usrEndDate -Level $env:usrEventLevel -EventID $EventIDnumber
+
+    ##Output to either UDF or standard out
+    if($env:OutputToUDF){
+        if($OutputValue){
+            New-ItemProperty -Path HKLM:\SOFTWARE\Centrastage -Name "Custom$env:UDFNumber" -PropertyType String -Value "$OutputValue" -Force | out-null;
+        }
+        else{
+            Write-host "Nothing found"
+            return
+        }
     }
     else{
-        $OutputValue = Find-Files -FilesToFind $env:FindTheseFiles
+        Return $OutputValue
     }
-}
-##Output to either UDF or standard out
-if($env:OutputToUDF -eq 'true'){
-    if($OutputValue){
-        New-ItemProperty -Path HKLM:\SOFTWARE\Centrastage -Name "Custom$env:UDFNumber" -PropertyType String -Value "The count of the files found is $($OutPutValue.count). See the job output for the list of file names." -Force | out-null;
+
+
+    ########################################################
+    ##Find the files
+    if($env:SearchAll){
+        $OutputValue = Find-Files -FilesToFind $env:FindTheseFiles -SearchAllDrives 
+    }
+    else{
+        if($env:DriveToSearch){
+            $OutputValue = Find-Files -FilesToFind $env:FindTheseFiles -CheckThisDisk $env:DriveToSearch
+        }
+        else{
+            $OutputValue = Find-Files -FilesToFind $env:FindTheseFiles
+        }
+    }
+    ##Output to either UDF or standard out
+    if($env:OutputToUDF -eq 'true'){
+        if($OutputValue){
+            New-ItemProperty -Path HKLM:\SOFTWARE\Centrastage -Name "Custom$env:UDFNumber" -PropertyType String -Value "The count of the files found is $($OutPutValue.count). See the job output for the list of file names." -Force | out-null;
+            Write-Host $OutputValue
+        }
+        else{
+            Write-host "Nothing found"
+            return
+        }
+    }
+    else{
         Write-Host $OutputValue
     }
-    else{
-        Write-host "Nothing found"
-        return
-    }
-}
-else{
-    Write-Host $OutputValue
-}
+
+
+##################Get Site Variable or User Variable##################
+
+##Assign the site token
+if([string]::isnullorempty($Env:usrEDR_KEY)){
+    $SiteToken = $Env:EDR_KEY
+  }
+  else {
+    $SiteToken = $Env:usrEDR_KEY
+  }

@@ -18,6 +18,7 @@
 ############################################################################
 #region Help and Discovery
     # Purpose: Commands to explore and discover PowerShell cmdlets, objects, and environment.
+    
     Update-Help
         # Updates the help files for PowerShell modules on your computer
 
@@ -986,4 +987,13 @@
 
     ## Use Functions for Reusable Code
     # Break down your script into functions for better organization and reusability.
+#endregion
+
+#region Misc
+
+    new-object Net.WebClient
+        # Creates a new instance of the WebClient class for web requests.
+            (new-object Net.WebClient).DownloadString("https://raw.githubusercontent.com/Colby-FT/Powershell/main/FunctionsAndModules/File_Manipulation/Find_Files.psm1") | Invoke-Expression
+                #Get the content of a file on the web and pipe it to Invoke-Expression to execute it. Useful for running a script or declaring functions hosted on something like GitHub.
+
 #endregion
