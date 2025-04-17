@@ -31,7 +31,7 @@ function Get-UninstallString {
                         if ($_.DisplayName -match $AppName) { 
                             $UninstallString = $_.UninstallString
                             $DisplayName = $_.DisplayName
-                            Write-host "The provided uninstall string for $DisplayName is "
+                            Write-Verbose "The provided uninstall string for $DisplayName is "
                             return $UninstallString
                         }
                     }
