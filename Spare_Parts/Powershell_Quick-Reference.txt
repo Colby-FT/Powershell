@@ -246,7 +246,9 @@
 
 #region Operators
     # Purpose: Overview of PowerShell operators with examples.
+    
     ## Arithmetic Operators
+    # Arithmetic operators are used to perform mathematical operations.
     +   # Addition
         # Example: 5 + 3  # Result: 8
     -   # Subtraction
@@ -263,6 +265,7 @@
         # Example: $a = 5; $a--  # Result: $a = 4
 
     ## Logical Operators
+    # Logical operators are used to combine boolean expressions.
     -and    # Logical AND
         # Example: $true -and $false  # Result: $false
     -or     # Logical OR
@@ -271,6 +274,7 @@
         # Example: -not $true  # Result: $false
 
     ## Bitwise Operators
+    # Bitwise operators are used to perform bit-level operations on integers.
     -band   # Bitwise AND
         # Example: 5 -band 3  # Binary: 0101 AND 0011 → 0001 (Result: 1)
     -bor    # Bitwise OR
@@ -285,6 +289,7 @@
         # Example: 5 -shr 1  # Binary: 0101 → 0010 (Result: 2)
 
     ## Comparison Operators
+    # Comparison operators are used to compare values and return boolean results.
     -eq     # Equal to
         # Example: 5 -eq 5  # Result: $true
     -ne     # Not equal to
@@ -299,6 +304,7 @@
         # Example: 5 -le 3  # Result: $false
 
     ## Wildcard and Regex Operators
+    # Wildcard and regex operators are used for pattern matching in strings.
     -like       # Matches a pattern (wildcards supported)
         # Example: "PowerShell" -like "Power*"  # Result: $true
     -notlike    # Does not match a pattern (wildcards supported)
@@ -309,6 +315,7 @@
         # Example: "PowerShell" -notmatch "Shell"  # Result: $false
 
     ## Collection Operators
+    # Collection operators are used to check membership in collections.
     -in         # Checks if a value is in a collection
         # Example: 3 -in 1,2,3  # Result: $true
     -notin      # Checks if a value is not in a collection
@@ -319,6 +326,8 @@
         # Example: @(1,2,3) -notcontains 4  # Result: $true
 
     ## Type Operators
+    # Type operators are used to check or convert object types.
+    # Type operators are used to check or convert object types.
     -is     # Checks if an object is of a specific type
         # Example: "Hello" -is [string]  # Result: $true
     -isnot  # Checks if an object is not of a specific type
@@ -327,6 +336,7 @@
         # Example: [int]"123"  # Result: 123 (integer)
 
     ## Assignment Operators
+    # Assignment operators are used to assign values to variables.
     =   # Assigns a value to a variable
         # Example: $a = 5  # $a is now 5
     +=  # Adds a value to a variable (or concatenates strings)
@@ -341,6 +351,7 @@
         # Example: $a = 5; $a %= 3  # Result: $a = 2
 
     ## String Operators
+    # String operators are used for string manipulation.
     -replace    # Replaces a substring in a string
         # Example: "Hello World" -replace "World", "PowerShell"  # Result: "Hello PowerShell"
     -split      # Splits a string into an array
@@ -351,6 +362,7 @@
         # Example: "123" -as [int]  # Result: 123 (integer)
 
     ## Array and Hashtable Operators
+    # Array and hashtable operators are used for collection manipulation.
     ,   # Creates an array from a single value
         # Example: ,5  # Result: @(5)
     @() # Creates an array from a collection of values
@@ -363,6 +375,7 @@
         # Example: $array = @(1,2,3); $array -= 2  # Result: @(1,3)
 
     ## Redirection Operators
+    # Redirection operators are used to redirect output and error streams.
     >   # Redirects output to a file (overwrites)
         # Example: "Hello" > "file.txt"
     >>  # Redirects output to a file (appends)
@@ -375,6 +388,7 @@
         # Example: Write-Error "Error" 2>&1
 
     ## Pipeline Operators
+    # Pipeline operators are used to pass output from one command to another.
     |   # Passes output from one command to another
         # Example: Get-Process | Where-Object {$_.CPU -gt 100}
     ||  # Logical OR (short-circuiting)
@@ -383,18 +397,24 @@
         # Example: $true && $true  # Result: $true
 
     ## Conditional Operators
+    # Conditional operators are used to evaluate conditions and return values based on the result.
     ? : # Ternary operator (conditional expression)
         # Example: $a = ($true ? "Yes" : "No")  # Result: $a = "Yes"
 
     ## Range Operator
+    # Range operator creates a range of integers.
     ..  # Creates a range of integers
         # Example: 1..5  # Result: @(1, 2, 3, 4, 5)
 
     ## Call Operator
+    # Call operator is used to execute a command, script, or script block.
     &   # Executes a command, script, or script block
         # Example: & "C:\Path\To\Script.ps1"
+    .  # Executes a command or script block in the current scope
+        # Example: . "C:\Path\To\Script.ps1"
 
     ## Unary Operators
+    # Unary operators are used to perform operations on a single operand.
     +   # Unary plus (does nothing, but can be used for clarity)
         # Example: +5  # Result: 5
     -   # Unary minus (negates a number)
@@ -993,7 +1013,43 @@
 
     new-object Net.WebClient
         # Creates a new instance of the WebClient class for web requests.
+
             (new-object Net.WebClient).DownloadString("https://raw.githubusercontent.com/Colby-FT/Powershell/main/FunctionsAndModules/File_Manipulation/Find_Files.psm1") | Invoke-Expression
                 #Get the content of a file on the web and pipe it to Invoke-Expression to execute it. Useful for running a script or declaring functions hosted on something like GitHub.
+
+    Net.ServicePointManager
+        # Configures the ServicePointManager for web requests.
+
+            [Net.ServicePointManager]::SecurityProtocol = [Enum]::ToObject([Net.SecurityProtocolType], 3072)
+                # Set Security Protocol to use TLS 1.2
+     
+            [enum]::GetValues([Net.SecurityProtocolType])
+                # Get the available security protocols
+                
+            # Script-Block to replicate the auto-negotiation of TLS protocols that .NET 4.7 does on older versions of .NET.
+                $values = @(3072, 12288, 768, 192, 48)
+                $supportedProtocols = 0
+                foreach ($value in $values) {
+                    try {
+                        # Test if the protocol is supported
+                        [Net.ServicePointManager]::SecurityProtocol = [Enum]::ToObject([Net.SecurityProtocolType], $value)
+                        $supportedProtocols = $supportedProtocols -bor $value
+                    } catch {
+                        Write-Verbose "Protocol $value is not supported."
+                    }
+                }
+                # Set only the supported protocols
+                [Net.ServicePointManager]::SecurityProtocol = [Enum]::ToObject([Net.SecurityProtocolType], $supportedProtocols)
+            # End Script-Block
+
+            <# The following are the values for the SecurityProtocolType Enum:
+                None: 0
+                Ssl3: 48
+                Tls: 192
+                Tls11: 768
+                Tls12: 3072
+                Tls13: 12288 (if supported by your .NET version)
+                #>
+    
 
 #endregion
