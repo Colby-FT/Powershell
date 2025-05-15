@@ -37,7 +37,7 @@ Function Find-Files {
         [String]$CheckThisDisk = "$env:SystemDrive\"
     )
     BEGIN {
-        Write-Host -f Green "Initializing file count operation."
+        Write-Host -f Green "Initializing file find operation."
         $Files = @() # Initialize $Files as an empty array
     }
     PROCESS {
