@@ -34,35 +34,74 @@ function Set-PwExpiresNextLogon {
         [Switch]$SetDisable
     )
     Begin {
-        $UserNamesList = Import-Csv -Path $CsvName
-        Import-Module ActiveDirectory
+        try {
+            $UserNamesList = Import-Csv -Path $CsvName
+        } catch {
+            Add-Content -Path "$LogFileName" -Value "Error importing CSV: $($_.Exception.Message)"
+            Write-verbose "Error importing CSV: $($_.Exception.Message)"
+            return
+        }
+        Import-Module ActiveDirectory -ErrorAction SilentlyContinue
         $WorkingDir = Set-ProjectFolder -baseDir $ProjectFolder
-        Start-Transcript -Path "$WorkingDir\$LogFileName" -Append
+        try {
+            Start-Transcript -Path "$WorkingDir\$LogFileName" -Append
+        } catch {}
     }
     Process {
         if([string]::isnullorempty($CsvName)){
+            $users = Get-ADUser -Filter 'Name -like "*"' -Properties DisplayName
+            $total = $users.Count
+            $i = 0
             if(!($SetDisable)){
-                Get-ADUser -Filter 'Name -like "*"' -Properties DisplayName | % {Set-ADUser $_ -ChangePasswordAtLogon:$True}
+                foreach ($user in $users) {
+                    $i++
+                    Write-Progress -Activity "Setting Password Expires at Next Logon" -Status "$i of $total" -PercentComplete (($i / $total) * 100)
+                    try { Set-ADUser $user -ChangePasswordAtLogon:$True -ErrorAction SilentlyContinue } catch {
+                        Add-Content -Path "$WorkingDir\$LogFileName" -Value "Error setting ChangePasswordAtLogon for $($user.SamAccountName): $($_.Exception.Message)"
+                        Write-Verbose "Error setting ChangePasswordAtLogon for $($user.SamAccountName): $($_.Exception.Message)"
+                    }
+                }
             }
             else{
-                Get-ADUser -Filter 'Name -like "*"' -Properties DisplayName | % {Set-ADUser $_ -ChangePasswordAtLogon:$False}
+                foreach ($user in $users) {
+                    $i++
+                    Write-Progress -Activity "Removing Password Expires at Next Logon" -Status "$i of $total" -PercentComplete (($i / $total) * 100)
+                    try { Set-ADUser $user -ChangePasswordAtLogon:$False -ErrorAction SilentlyContinue } catch {
+                        Add-Content -Path "$WorkingDir\$LogFileName" -Value "Error clearing ChangePasswordAtLogon for $($user.SamAccountName): $($_.Exception.Message)"
+                        Write-Verbose "Error clearing ChangePasswordAtLogon for $($user.SamAccountName): $($_.Exception.Message)"
+                    }
+                }
             }
+            Write-Progress -Activity "Processing Complete" -Completed
         }
         else{
+            $total = $UserNamesList.Count
+            $i = 0
             if(!($SetDisable)){
                 foreach ($User in $UserNamesList) {
+                    $i++
                     $ADUser = $User.$UserNameColumnTitle
+                    Write-Progress -Activity "Setting Password Expires at Next Logon" -Status "$i of $total" -PercentComplete (($i / $total) * 100)
                     Write-Host "Setting Password Expires at Next Logon flag for: " $ADUser
-                    Set-ADUser $ADUser -ChangePasswordAtLogon:$True
+                    try { Set-ADUser $ADUser -ChangePasswordAtLogon:$True -ErrorAction SilentlyContinue } catch {
+                        Add-Content -Path "$WorkingDir\$LogFileName" -Value "Error setting ChangePasswordAtLogon for $ADUser: $($_.Exception.Message)"
+                        Write-Verbose "Error setting ChangePasswordAtLogon for $ADUser: $($_.Exception.Message)"
+                    }
                 }
             }
             else{
                 foreach ($User in $UserNamesList) {
+                    $i++
                     $ADUser = $User.$UserNameColumnTitle
+                    Write-Progress -Activity "Removing Password Expires at Next Logon" -Status "$i of $total" -PercentComplete (($i / $total) * 100)
                     Write-Host "Removing Password Expires at Next Logon flag for: " $ADUser
-                    Set-ADUser $ADUser -ChangePasswordAtLogon:$False
+                    try { Set-ADUser $ADUser -ChangePasswordAtLogon:$False -ErrorAction SilentlyContinue } catch {
+                        Add-Content -Path "$WorkingDir\$LogFileName" -Value "Error clearing ChangePasswordAtLogon for $ADUser: $($_.Exception.Message)"
+                        Write-Verbose "Error clearing ChangePasswordAtLogon for $ADUser: $($_.Exception.Message)"
+                    }
                 }
             }
+            Write-Progress -Activity "Processing Complete" -Completed
         }
     }
     End {
