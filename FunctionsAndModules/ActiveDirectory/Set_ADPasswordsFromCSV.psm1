@@ -46,30 +46,54 @@ function Set-ADPasswordFromCSV {
         [Int]$PwLength = 14
     )
     Begin {
-        $UserNamesList = Import-Csv -Path $CsvName
-        Import-Module ActiveDirectory
+        try {
+            $UserNamesList = Import-Csv -Path $CsvName
+        } catch {
+            Add-Content -Path "$LogFileName" -Value "Error importing CSV $($_.Exception.Message)"
+            Write-Host -ForegroundColor Red "Error importing CSV $($_.Exception.Message)"
+            return
+        }
+        Import-Module ActiveDirectory -ErrorAction SilentlyContinue
         $WorkingDir = Set-ProjectFolder -baseDir $ProjectFolder
+        Write-Host "For errors check log file at $WorkingDir\$LogFileName, or run with -Verbose for more details."
         Start-Transcript -Path "$WorkingDir\$LogFileName" -Append
     }
     Process {
+        $total = $UserNamesList.Count
+        $i = 0
         if(!($PwFromCSV)){
             foreach ($User in $UserNamesList) {
+                $i++
                 $ADUser = $User.$UserNameColumnTitle
                 $ADPW = Get-RandomString -length $PwLength
                 $password = ConvertTo-SecureString -AsPlainText $ADPW -force
-                Write-Host "Setting Password for " $ADUser " to " $ADPW
-                Set-ADAccountPassword $ADUser -NewPassword $password -Reset
+                Write-Verbose "Setting Password for $ADUser to $ADPW"
+                Write-Progress -Activity "Setting random passwords from CSV" -Status "$i of $total" -PercentComplete (($i / $total) * 100)
+                try {
+                    Set-ADAccountPassword $ADUser -NewPassword $password -Reset -ErrorAction SilentlyContinue
+                } catch {
+                    Add-Content -Path "$WorkingDir\$LogFileName" -Value "Error setting password for $ADUser $($_.Exception.Message)"
+                    Write-Verbose "Error setting password for $ADUser $($_.Exception.Message)"
+                }
             }
         }
         else{
             foreach ($User in $UserNamesList) {
+                $i++
                 $ADUser = $User.$UserNameColumnTitle
-                $ADPW = $user.$PwColumnTitle
+                $ADPW = $User.$PwColumnTitle
                 $password = ConvertTo-SecureString -AsPlainText $ADPW -force
-                Write-Host "Setting Password for " $ADUser " to " $ADPW
-                Set-ADAccountPassword $ADUser -NewPassword $password -Reset
+                Write-Verbose "Setting Password for $ADUser to $ADPW"
+                Write-Progress -Activity "Setting provided passwords from CSV" -Status "$i of $total" -PercentComplete (($i / $total) * 100)
+                try {
+                    Set-ADAccountPassword $ADUser -NewPassword $password -Reset -ErrorAction SilentlyContinue
+                } catch {
+                    Add-Content -Path "$WorkingDir\$LogFileName" -Value "Error setting password for $ADUser $($_.Exception.Message)"
+                    Write-Verbose "Error setting password for $ADUser $($_.Exception.Message)"
+                }
             }
         }
+        Write-Progress -Activity "Processing Complete" -Completed
     }
     End {
         Stop-Transcript

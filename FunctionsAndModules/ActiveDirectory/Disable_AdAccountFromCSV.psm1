@@ -29,17 +29,35 @@ function Disable-AdAccountFromCSV {
         [String]$LogFileName = "DisabledUsers.log"
     )
     Begin {
-        $UserNamesList = Import-Csv -Path $CsvName
-        Import-Module ActiveDirectory
+        try {
+            $UserNamesList = Import-Csv -Path $CsvName
+        } catch {
+            Add-Content -Path "$LogFileName" -Value "Error importing CSV: $($_.Exception.Message)"
+            Write-Host -ForegroundColor Red "Error importing CSV: $($_.Exception.Message)"
+            return
+        }
+        Import-Module ActiveDirectory -ErrorAction SilentlyContinue
         $WorkingDir = Set-ProjectFolder -baseDir $ProjectFolder
+        Write-Host "For errors check log file at $WorkingDir\$LogFileName, or run with -Verbose for more details."
         Start-Transcript -Path "$WorkingDir\$LogFileName" -Append
     }
     Process {
+        $total = $UserNamesList.Count
+        $i = 0
         foreach ($User in $UserNamesList) {
+            $i++
             $ADUser = $User.$UserNameColumnTitle
-            Disable-ADAccount -Identity $ADUser
-            Write-Host "Disabled $ADUser"
+            Write-Verbose "Disabling account $ADUser"
+            Write-Progress -Activity "Disabling AD accounts from CSV" -Status "$i of $total" -PercentComplete (($i / $total) * 100)
+            try {
+                Disable-ADAccount -Identity $ADUser -ErrorAction SilentlyContinue
+                Write-Host "Disabled $ADUser"
+            } catch {
+                Add-Content -Path "$WorkingDir\$LogFileName" -Value "Error disabling $ADUser $($_.Exception.Message)"
+                Write-Verbose "Error disabling $ADUser $($_.Exception.Message)"
+            }
         }
+        Write-Progress -Activity "Processing Complete" -Completed
     }
     End {
         Stop-Transcript

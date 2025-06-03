@@ -39,37 +39,77 @@ function Set-PasswordNeverExpires {
         [Switch]$SetEnable
     )
     Begin {
-        $UserNamesList = Import-Csv -Path $CsvName
-        Import-Module ActiveDirectory
+        try {
+            if (![string]::IsNullOrEmpty($CsvName)) {
+                $UserNamesList = Import-Csv -Path $CsvName
+            }
+        } catch {
+            Add-Content -Path "$LogFileName" -Value "Error importing CSV: $($_.Exception.Message)"
+            Write-Host -ForegroundColor Red "Error importing CSV: $($_.Exception.Message)"
+            return
+        }
+        Import-Module ActiveDirectory -ErrorAction SilentlyContinue
         $WorkingDir = Set-ProjectFolder -baseDir $ProjectFolder
+        Write-Host "For errors check log file at $WorkingDir\$LogFileName, or run with -Verbose for more details."
         Start-Transcript -Path "$WorkingDir\$LogFileName" -Append
     }
     Process {
         if([string]::isnullorempty($CsvName)){
+            $users = Get-ADUser -Filter 'Name -like "*"' -Properties SamAccountName
+            $total = $users.Count
+            $i = 0
             if(!($SetEnable)){
-                Write-Host "Removing Password Never Expires flag for all users."
-                Get-ADUser -Filter 'Name -like "*"' -Properties DisplayName | % {Set-ADUser $_ -PasswordNeverExpires:$False}
+                foreach ($user in $users) {
+                    $i++
+                    Write-Verbose "Removing Password Never Expires flag for $($user.SamAccountName)"
+                    Write-Progress -Activity "Removing Password Never Expires flag for all users" -Status "$i of $total" -PercentComplete (($i / $total) * 100)
+                    try { Set-ADUser $user -PasswordNeverExpires:$False -ErrorAction SilentlyContinue } catch {
+                        Add-Content -Path "$WorkingDir\$LogFileName" -Value "Error removing PasswordNeverExpires for $($user.SamAccountName): $($_.Exception.Message)"
+                        Write-Verbose "Error removing PasswordNeverExpires for $($user.SamAccountName): $($_.Exception.Message)"
+                    }
+                }
             }
             else{
-                Write-Host "Setting Password Never Expires flag for all users."
-                Get-ADUser -Filter 'Name -like "*"' -Properties DisplayName | % {Set-ADUser $_ -PasswordNeverExpires:$True}
+                foreach ($user in $users) {
+                    $i++
+                    Write-Verbose "Setting Password Never Expires flag for $($user.SamAccountName)"
+                    Write-Progress -Activity "Setting Password Never Expires flag for all users" -Status "$i of $total" -PercentComplete (($i / $total) * 100)
+                    try { Set-ADUser $user -PasswordNeverExpires:$True -ErrorAction SilentlyContinue } catch {
+                        Add-Content -Path "$WorkingDir\$LogFileName" -Value "Error setting PasswordNeverExpires for $($user.SamAccountName): $($_.Exception.Message)"
+                        Write-Verbose "Error setting PasswordNeverExpires for $($user.SamAccountName): $($_.Exception.Message)"
+                    }
+                }
             }
+            Write-Progress -Activity "Processing Complete" -Completed
         }
         else{
+            $total = $UserNamesList.Count
+            $i = 0
             if(!($SetEnable)){
                 foreach ($User in $UserNamesList) {
+                    $i++
                     $ADUser = $User.$UserNameColumnTitle
-                    Write-Host "Removing Password Never Expires flag for " $ADUser
-                    Set-ADUser $ADUser -PasswordNeverExpires:$False
+                    Write-Verbose "Removing Password Never Expires flag for $ADUser"
+                    Write-Progress -Activity "Removing Password Never Expires flag from CSV" -Status "$i of $total" -PercentComplete (($i / $total) * 100)
+                    try { Set-ADUser $ADUser -PasswordNeverExpires:$False -ErrorAction SilentlyContinue } catch {
+                        Add-Content -Path "$WorkingDir\$LogFileName" -Value "Error removing PasswordNeverExpires for $ADUser $($_.Exception.Message)"
+                        Write-Verbose "Error removing PasswordNeverExpires for $ADUser $($_.Exception.Message)"
+                    }
                 }
             }
             else{
                 foreach ($User in $UserNamesList) {
+                    $i++
                     $ADUser = $User.$UserNameColumnTitle
-                    Write-Host "Setting Password Never Expires flag for " $ADUser
-                    Set-ADUser $ADUser -PasswordNeverExpires:$True
+                    Write-Verbose "Setting Password Never Expires flag for $ADUser"
+                    Write-Progress -Activity "Setting Password Never Expires flag from CSV" -Status "$i of $total" -PercentComplete (($i / $total) * 100)
+                    try { Set-ADUser $ADUser -PasswordNeverExpires:$True -ErrorAction SilentlyContinue } catch {
+                        Add-Content -Path "$WorkingDir\$LogFileName" -Value "Error setting PasswordNeverExpires for $ADUser $($_.Exception.Message)"
+                        Write-Verbose "Error setting PasswordNeverExpires for $ADUser $($_.Exception.Message)"
+                    }
                 }
             }
+            Write-Progress -Activity "Processing Complete" -Completed
         }
     }
     End {

@@ -356,7 +356,7 @@ function Prompt-User {
     1 - Pull a list of all active users in AD or users with admin privileges
     2 - Pull a list of all computers or all domain controllers
     3 - Set the password on accounts
-    4 - Remove the password never expires flag on accounts
+    4 - Set or Remove the password never expires flag on accounts
     5 - Set the password expires at next logon flag on accounts
     6 - Disable accounts in AD
     7 - Set DNS on this device
@@ -366,6 +366,8 @@ function Prompt-User {
     11 - Move FSMO roles to a different server
     12 - Perform a metadata cleanup (Remove a demoted or tombstoned DC from AD)
     13 - Reset Kerberos Password
+    14 - Check for orphaned domain controllers
+    15 - Replicate AD Schema between all DCs
     99 - Exit
     '
     return $choice
@@ -514,30 +516,54 @@ function Set-ADPasswordFromCSV {
         [Int]$PwLength = 14
     )
     Begin {
-        $UserNamesList = Import-Csv -Path $CsvName
-        Import-Module ActiveDirectory
+        try {
+            $UserNamesList = Import-Csv -Path $CsvName
+        } catch {
+            Add-Content -Path "$LogFileName" -Value "Error importing CSV $($_.Exception.Message)"
+            Write-Host -ForegroundColor Red "Error importing CSV $($_.Exception.Message)"
+            return
+        }
+        Import-Module ActiveDirectory -ErrorAction SilentlyContinue
         $WorkingDir = Set-ProjectFolder -baseDir $ProjectFolder
+        Write-Host "For errors check log file at $WorkingDir\$LogFileName, or run with -Verbose for more details."
         Start-Transcript -Path "$WorkingDir\$LogFileName" -Append
     }
     Process {
+        $total = $UserNamesList.Count
+        $i = 0
         if(!($PwFromCSV)){
             foreach ($User in $UserNamesList) {
+                $i++
                 $ADUser = $User.$UserNameColumnTitle
                 $ADPW = Get-RandomString -length $PwLength
                 $password = ConvertTo-SecureString -AsPlainText $ADPW -force
-                Write-Host "Setting Password for " $ADUser " to " $ADPW
-                Set-ADAccountPassword $ADUser -NewPassword $password -Reset
+                Write-Verbose "Setting Password for $ADUser to $ADPW"
+                Write-Progress -Activity "Setting random passwords from CSV" -Status "$i of $total" -PercentComplete (($i / $total) * 100)
+                try {
+                    Set-ADAccountPassword $ADUser -NewPassword $password -Reset -ErrorAction SilentlyContinue
+                } catch {
+                    Add-Content -Path "$WorkingDir\$LogFileName" -Value "Error setting password for $ADUser $($_.Exception.Message)"
+                    Write-Verbose "Error setting password for $ADUser $($_.Exception.Message)"
+                }
             }
         }
         else{
             foreach ($User in $UserNamesList) {
+                $i++
                 $ADUser = $User.$UserNameColumnTitle
-                $ADPW = $user.$PwColumnTitle
+                $ADPW = $User.$PwColumnTitle
                 $password = ConvertTo-SecureString -AsPlainText $ADPW -force
-                Write-Host "Setting Password for " $ADUser " to " $ADPW
-                Set-ADAccountPassword $ADUser -NewPassword $password -Reset
+                Write-Verbose "Setting Password for $ADUser to $ADPW"
+                Write-Progress -Activity "Setting provided passwords from CSV" -Status "$i of $total" -PercentComplete (($i / $total) * 100)
+                try {
+                    Set-ADAccountPassword $ADUser -NewPassword $password -Reset -ErrorAction SilentlyContinue
+                } catch {
+                    Add-Content -Path "$WorkingDir\$LogFileName" -Value "Error setting password for $ADUser $($_.Exception.Message)"
+                    Write-Verbose "Error setting password for $ADUser $($_.Exception.Message)"
+                }
             }
         }
+        Write-Progress -Activity "Processing Complete" -Completed
     }
     End {
         Stop-Transcript
@@ -583,28 +609,31 @@ function Set-PwExpiresNextLogon {
     )
     Begin {
         try {
-            $UserNamesList = Import-Csv -Path $CsvName
+            if (![string]::IsNullOrEmpty($CsvName)) {
+                $UserNamesList = Import-Csv -Path $CsvName
+            }
         } catch {
             Add-Content -Path "$LogFileName" -Value "Error importing CSV: $($_.Exception.Message)"
-            Write-verbose "Error importing CSV: $($_.Exception.Message)"
+            Write-Host -ForegroundColor Red "Error importing CSV: $($_.Exception.Message)"
             return
         }
         Import-Module ActiveDirectory -ErrorAction SilentlyContinue
         $WorkingDir = Set-ProjectFolder -baseDir $ProjectFolder
-        try {
-            Start-Transcript -Path "$WorkingDir\$LogFileName" -Append
-        } catch {}
+        Write-Host "For errors check log file at $WorkingDir\$LogFileName, or run with -Verbose for more details."
+        Start-Transcript -Path "$WorkingDir\$LogFileName" -Append
     }
     Process {
         if([string]::isnullorempty($CsvName)){
-            $users = Get-ADUser -Filter 'Name -like "*"' -Properties DisplayName
+            $users = Get-ADUser -Filter 'Name -like "*"' -Properties SamAccountName
             $total = $users.Count
             $i = 0
             if(!($SetDisable)){
                 foreach ($user in $users) {
                     $i++
-                    Write-Progress -Activity "Setting Password Expires at Next Logon" -Status "$i of $total" -PercentComplete (($i / $total) * 100)
-                    try { Set-ADUser $user -ChangePasswordAtLogon:$True -ErrorAction SilentlyContinue } catch {
+                    Write-Verbose "Setting Password Expires at Next Logon for $($user.SamAccountName)"
+                    Write-Progress -Activity "Setting Password Expires at Next Logon for all users" -Status "$i of $total" -PercentComplete (($i / $total) * 100)
+                    try { Set-ADUser $user -ChangePasswordAtLogon:$True -ErrorAction SilentlyContinue 
+                    } catch {
                         Add-Content -Path "$WorkingDir\$LogFileName" -Value "Error setting ChangePasswordAtLogon for $($user.SamAccountName): $($_.Exception.Message)"
                         Write-Verbose "Error setting ChangePasswordAtLogon for $($user.SamAccountName): $($_.Exception.Message)"
                     }
@@ -613,7 +642,8 @@ function Set-PwExpiresNextLogon {
             else{
                 foreach ($user in $users) {
                     $i++
-                    Write-Progress -Activity "Removing Password Expires at Next Logon" -Status "$i of $total" -PercentComplete (($i / $total) * 100)
+                    Write-Verbose "Removing Password Expires at Next Logon for $($user.SamAccountName)"
+                    Write-Progress -Activity "Removing Password Expires at Next Logon for all users" -Status "$i of $total" -PercentComplete (($i / $total) * 100)
                     try { Set-ADUser $user -ChangePasswordAtLogon:$False -ErrorAction SilentlyContinue } catch {
                         Add-Content -Path "$WorkingDir\$LogFileName" -Value "Error clearing ChangePasswordAtLogon for $($user.SamAccountName): $($_.Exception.Message)"
                         Write-Verbose "Error clearing ChangePasswordAtLogon for $($user.SamAccountName): $($_.Exception.Message)"
@@ -629,11 +659,11 @@ function Set-PwExpiresNextLogon {
                 foreach ($User in $UserNamesList) {
                     $i++
                     $ADUser = $User.$UserNameColumnTitle
-                    Write-Progress -Activity "Setting Password Expires at Next Logon" -Status "$i of $total" -PercentComplete (($i / $total) * 100)
-                    Write-Host "Setting Password Expires at Next Logon flag for: " $ADUser
+                    Write-Verbose "Setting Password Expires at Next Logon for $ADUser"
+                    Write-Progress -Activity "Setting Password Expires at Next Logon from CSV" -Status "$i of $total" -PercentComplete (($i / $total) * 100)
                     try { Set-ADUser $ADUser -ChangePasswordAtLogon:$True -ErrorAction SilentlyContinue } catch {
-                        Add-Content -Path "$WorkingDir\$LogFileName" -Value "Error setting ChangePasswordAtLogon for $ADUser: $($_.Exception.Message)"
-                        Write-Verbose "Error setting ChangePasswordAtLogon for $ADUser: $($_.Exception.Message)"
+                        Add-Content -Path "$WorkingDir\$LogFileName" -Value "Error setting ChangePasswordAtLogon for $ADUser $($_.Exception.Message)"
+                        Write-Verbose "Error setting ChangePasswordAtLogon for $ADUser $($_.Exception.Message)"
                     }
                 }
             }
@@ -641,11 +671,11 @@ function Set-PwExpiresNextLogon {
                 foreach ($User in $UserNamesList) {
                     $i++
                     $ADUser = $User.$UserNameColumnTitle
-                    Write-Progress -Activity "Removing Password Expires at Next Logon" -Status "$i of $total" -PercentComplete (($i / $total) * 100)
-                    Write-Host "Removing Password Expires at Next Logon flag for: " $ADUser
+                    Write-Verbose "Removing Password Expires at Next Logon for $ADUser"
+                    Write-Progress -Activity "Removing Password Expires at Next Logon from CSV" -Status "$i of $total" -PercentComplete (($i / $total) * 100)
                     try { Set-ADUser $ADUser -ChangePasswordAtLogon:$False -ErrorAction SilentlyContinue } catch {
-                        Add-Content -Path "$WorkingDir\$LogFileName" -Value "Error clearing ChangePasswordAtLogon for $ADUser: $($_.Exception.Message)"
-                        Write-Verbose "Error clearing ChangePasswordAtLogon for $ADUser: $($_.Exception.Message)"
+                        Add-Content -Path "$WorkingDir\$LogFileName" -Value "Error clearing ChangePasswordAtLogon for $ADUser $($_.Exception.Message)"
+                        Write-Verbose "Error clearing ChangePasswordAtLogon for $ADUser $($_.Exception.Message)"
                     }
                 }
             }
@@ -675,6 +705,7 @@ function Disable-AdAccountFromCSV {
     The default is $env:SystemDrive\FT
     .PARAMETER UserNameColumnTitle
     .PARAMETER LogFileName
+    Sets the length of the randomly generated password. The default is 14.
 
     .EXAMPLE
     Disable-AdAccountFromCSV -CsvName "C:\MyFolder\Users.csv"
@@ -690,17 +721,35 @@ function Disable-AdAccountFromCSV {
         [String]$LogFileName = "DisabledUsers.log"
     )
     Begin {
-        $UserNamesList = Import-Csv -Path $CsvName
-        Import-Module ActiveDirectory
+        try {
+            $UserNamesList = Import-Csv -Path $CsvName
+        } catch {
+            Add-Content -Path "$LogFileName" -Value "Error importing CSV: $($_.Exception.Message)"
+            Write-Host -ForegroundColor Red "Error importing CSV: $($_.Exception.Message)"
+            return
+        }
+        Import-Module ActiveDirectory -ErrorAction SilentlyContinue
         $WorkingDir = Set-ProjectFolder -baseDir $ProjectFolder
+        Write-Host "For errors check log file at $WorkingDir\$LogFileName, or run with -Verbose for more details."
         Start-Transcript -Path "$WorkingDir\$LogFileName" -Append
     }
     Process {
+        $total = $UserNamesList.Count
+        $i = 0
         foreach ($User in $UserNamesList) {
+            $i++
             $ADUser = $User.$UserNameColumnTitle
-            Disable-ADAccount -Identity $ADUser
-            Write-Host "Disabled $ADUser"
+            Write-Verbose "Disabling account $ADUser"
+            Write-Progress -Activity "Disabling AD accounts from CSV" -Status "$i of $total" -PercentComplete (($i / $total) * 100)
+            try {
+                Disable-ADAccount -Identity $ADUser -ErrorAction SilentlyContinue
+                Write-Host "Disabled $ADUser"
+            } catch {
+                Add-Content -Path "$WorkingDir\$LogFileName" -Value "Error disabling $ADUser $($_.Exception.Message)"
+                Write-Verbose "Error disabling $ADUser $($_.Exception.Message)"
+            }
         }
+        Write-Progress -Activity "Processing Complete" -Completed
     }
     End {
         Stop-Transcript
@@ -774,6 +823,127 @@ function Set-PwExpiresNextLogon {
                     Set-ADUser $ADUser -ChangePasswordAtLogon:$False
                 }
             }
+        }
+    }
+    End {
+        Stop-Transcript
+        Write-Host "The log file can be found at $WorkingDir\$LogFileName"
+    }
+}
+
+#Function to set password never expires flag
+function Set-PasswordNeverExpires {
+    <#
+    .SYNOPSIS
+    Set AD Password Never Expires flag
+
+    .DESCRIPTION
+    Set AD Password Never Expires flag. Either remove the flag from accounts (default), or set the flag for accounts. If no CSV path is provided to -CsvName this will run on all accounts.
+
+    .PARAMETER CsvName
+    Enter the path to a csv with the list of Sam Account Names.
+    The default is to title the username column SamAccountName. This can be overidden with the UserNameColumnTitle parameter.
+    .PARAMETER ProjectFolder
+    The default is $env:SystemDrive\FT
+    .PARAMETER UserNameColumnTitle
+    .PARAMETER LogFileName
+    .PARAMETER SetEnable
+    Defualt is to disable (remove the flag). Include this switch to enable pw ever expires instead.
+
+    .EXAMPLE
+    Set-PasswordNeverExpires
+    Removes the password never expires flag from all AD accounts.
+
+    .EXAMPLE
+    Set-PasswordNeverExpires -CsvName "C:\MyFolder\Users.csv"
+    Removes the password never expires flag from all accounts listed in a CSV.
+
+    .EXAMPLE
+    Set-ADPasswordFromCSV -CsvName "C:\MyFolder\Users.csv" -SetEnable
+    Sets the Password Never Expires flag for all accounts listed in a CSV. Useful for service accounts.
+
+    #>
+    [CmdletBinding()]
+    param (
+        [Parameter(HelpMessage='Enter the path to the CSV with the list of users. Such as "C:\FT\Users.csv"')]
+        [String]$CsvName,
+        [String]$ProjectFolder = "$env:SystemDrive\FT",
+        [String]$UserNameColumnTitle = "SamAccountName",
+        [String]$LogFileName = "PwNeverExpires.log",
+        [Switch]$SetEnable
+    )
+    Begin {
+        try {
+            if (![string]::IsNullOrEmpty($CsvName)) {
+                $UserNamesList = Import-Csv -Path $CsvName
+            }
+        } catch {
+            Add-Content -Path "$LogFileName" -Value "Error importing CSV: $($_.Exception.Message)"
+            Write-Host -ForegroundColor Red "Error importing CSV: $($_.Exception.Message)"
+            return
+        }
+        Import-Module ActiveDirectory -ErrorAction SilentlyContinue
+        $WorkingDir = Set-ProjectFolder -baseDir $ProjectFolder
+        Write-Host "For errors check log file at $WorkingDir\$LogFileName, or run with -Verbose for more details."
+        Start-Transcript -Path "$WorkingDir\$LogFileName" -Append
+    }
+    Process {
+        if([string]::isnullorempty($CsvName)){
+            $users = Get-ADUser -Filter 'Name -like "*"' -Properties SamAccountName
+            $total = $users.Count
+            $i = 0
+            if(!($SetEnable)){
+                foreach ($user in $users) {
+                    $i++
+                    Write-Verbose "Removing Password Never Expires flag for $($user.SamAccountName)"
+                    Write-Progress -Activity "Removing Password Never Expires flag for all users" -Status "$i of $total" -PercentComplete (($i / $total) * 100)
+                    try { Set-ADUser $user -PasswordNeverExpires:$False -ErrorAction SilentlyContinue } catch {
+                        Add-Content -Path "$WorkingDir\$LogFileName" -Value "Error removing PasswordNeverExpires for $($user.SamAccountName): $($_.Exception.Message)"
+                        Write-Verbose "Error removing PasswordNeverExpires for $($user.SamAccountName): $($_.Exception.Message)"
+                    }
+                }
+            }
+            else{
+                foreach ($user in $users) {
+                    $i++
+                    Write-Verbose "Setting Password Never Expires flag for $($user.SamAccountName)"
+                    Write-Progress -Activity "Setting Password Never Expires flag for all users" -Status "$i of $total" -PercentComplete (($i / $total) * 100)
+                    try { Set-ADUser $user -PasswordNeverExpires:$True -ErrorAction SilentlyContinue } catch {
+                        Add-Content -Path "$WorkingDir\$LogFileName" -Value "Error setting PasswordNeverExpires for $($user.SamAccountName): $($_.Exception.Message)"
+                        Write-Verbose "Error setting PasswordNeverExpires for $($user.SamAccountName): $($_.Exception.Message)"
+                    }
+                }
+            }
+            Write-Progress -Activity "Processing Complete" -Completed
+        }
+        else{
+            $total = $UserNamesList.Count
+            $i = 0
+            if(!($SetEnable)){
+                foreach ($User in $UserNamesList) {
+                    $i++
+                    $ADUser = $User.$UserNameColumnTitle
+                    Write-Verbose "Removing Password Never Expires flag for $ADUser"
+                    Write-Progress -Activity "Removing Password Never Expires flag from CSV" -Status "$i of $total" -PercentComplete (($i / $total) * 100)
+                    try { Set-ADUser $ADUser -PasswordNeverExpires:$False -ErrorAction SilentlyContinue } catch {
+                        Add-Content -Path "$WorkingDir\$LogFileName" -Value "Error removing PasswordNeverExpires for $ADUser $($_.Exception.Message)"
+                        Write-Verbose "Error removing PasswordNeverExpires for $ADUser $($_.Exception.Message)"
+                    }
+                }
+            }
+            else{
+                foreach ($User in $UserNamesList) {
+                    $i++
+                    $ADUser = $User.$UserNameColumnTitle
+                    Write-Verbose "Setting Password Never Expires flag for $ADUser"
+                    Write-Progress -Activity "Setting Password Never Expires flag from CSV" -Status "$i of $total" -PercentComplete (($i / $total) * 100)
+                    try { Set-ADUser $ADUser -PasswordNeverExpires:$True -ErrorAction SilentlyContinue } catch {
+                        Add-Content -Path "$WorkingDir\$LogFileName" -Value "Error setting PasswordNeverExpires for $ADUser $($_.Exception.Message)"
+                        Write-Verbose "Error setting PasswordNeverExpires for $ADUser $($_.Exception.Message)"
+                    }
+                }
+            }
+            Write-Progress -Activity "Processing Complete" -Completed
         }
     }
     End {
@@ -860,6 +1030,65 @@ Function Invoke-MetaDataCleanup{
                 break AllADSites
             }    
         }
+    }
+}
+
+#Function to check for ophaned domain controllers
+function Get-OrphanedDomainControllers {
+    param(
+        [Parameter(Mandatory)]
+        [string]$DomainName
+    )
+
+    # Convert domain name to distinguished name format
+    $dnParts = $DomainName -split '\.'
+    $searchBase = "CN=Configuration," + ($dnParts | ForEach-Object { "DC=$_"} -join ",")
+
+    # Get all live Domain Controllers
+    $liveDCs = Get-ADDomainController -Filter * | Select-Object -ExpandProperty Name
+
+    # Get all NTDS Settings objects (DCs in metadata)
+    $ntdsObjects = Get-ADObject -SearchBase $searchBase `
+      -LDAPFilter "(objectClass=nTDSDSA)" -Properties distinguishedName
+
+    # Extract server names from NTDS objects
+    $metadataDCs = $ntdsObjects | ForEach-Object {
+        ($_."distinguishedName" -split ",")[1] -replace "^CN=", ""
+    }
+
+    # Compare lists
+    $tombstonedDCs = $metadataDCs | Where-Object { $_ -notin $liveDCs }
+
+    # Output results
+    Write-Host "`nLive Domain Controllers:`n" -ForegroundColor Green
+    $liveDCs
+
+    Write-Host "`nTombstoned/Orphaned Domain Controllers in Metadata:`n" -ForegroundColor Red
+    $tombstonedDCs
+}
+
+# Function to invoke schema replication across all domain controllers
+function Invoke-ADSchemaReplicationAllDCs {
+    try {
+        # Get all domain controllers in the domain
+        $allDCs = Get-ADDomainController -Filter * | Select-Object -ExpandProperty HostName
+
+        # Get the schema naming context
+        $schemaDN = (Get-ADRootDSE).schemaNamingContext
+
+        foreach ($sourceDC in $allDCs) {
+            $targetDCs = $allDCs | Where-Object { $_ -ne $sourceDC }
+            foreach ($target in $targetDCs) {
+                try {
+                    Sync-ADObject -Object (Get-ADObject -Identity $schemaDN) -Source $sourceDC -Destination $target -ErrorAction Stop
+                    Write-Host "Successfully synced schema from $sourceDC to $target" -ForegroundColor Green
+                } catch {
+                    Write-Warning "Failed to sync schema from $sourceDC to $target $($_.Exception.Message)"
+                }
+            }
+        }
+    } catch {
+        Write-Error "Error during schema replication: $($_.Exception.Message)"
     }
 }
 
@@ -1068,6 +1297,7 @@ do {
             $AllOrCsv = Read-Host "Would you like to:
             1 - Remove the password never expires flag from all users
             2 - Remove the password never expires flag from users in a csv
+            3 - Set the password never expires flag for users in a csv
             "
             switch ($AllOrCsv){
                 1 {
@@ -1078,6 +1308,11 @@ do {
                     $UserSetCSV = Read-Host 'Enter the path to the CSV with the list of SAM Account Names. i.e. C:\FT\Users.csv: '
                     $UserSetDir = Read-Host 'Enter the path for the working directory. i.e. C:\FT\ '
                     Set-PasswordNeverExpires -CsvName $UserSetCsv -ProjectFolder $UserSetDir
+                }
+                3 {
+                    $UserSetCSV = Read-Host 'Enter the path to the CSV with the list of SAM Account Names. i.e. C:\FT\Users.csv: '
+                    $UserSetDir = Read-Host 'Enter the path for the working directory. i.e. C:\FT\ '
+                    Set-PasswordNeverExpires -CsvName $UserSetCsv -ProjectFolder $UserSetDir -SetEnable
                 }
                 default {
                     Write-Host "Please enter 1 for all users or 2 for users from CSV."
@@ -1182,11 +1417,18 @@ do {
             Write-Host "Setting Password for " $ADUser " to " $ADPW
             Set-ADAccountPassword $ADUser -NewPassword $password -Reset
         }
+        14 {
+            $DomainName = Get-DomainName
+            Get-OrphanedDomainControllers -DomainName $DomainName
+        }
+        15 {
+            Invoke-ADSchemaReplicationAllDCs
+        }
         99 {
             Write-Host "Thank you for using the AD Toolkit."
             Exit
         }
         
-        default { Write-Output "Invalid choice. Please choose an option from 0 to 11, or 99." }
+        default { Write-Output "Invalid choice. Please choose an option from 0 to 15, or 99." }
     }
 } while ($userChoice -ne 99)
