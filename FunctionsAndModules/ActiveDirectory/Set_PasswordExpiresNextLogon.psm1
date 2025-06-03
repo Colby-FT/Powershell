@@ -84,8 +84,8 @@ function Set-PwExpiresNextLogon {
                     Write-Progress -Activity "Setting Password Expires at Next Logon" -Status "$i of $total" -PercentComplete (($i / $total) * 100)
                     Write-Host "Setting Password Expires at Next Logon flag for: " $ADUser
                     try { Set-ADUser $ADUser -ChangePasswordAtLogon:$True -ErrorAction SilentlyContinue } catch {
-                        Add-Content -Path "$WorkingDir\$LogFileName" -Value "Error setting ChangePasswordAtLogon for $ADUser: $($_.Exception.Message)"
-                        Write-Verbose "Error setting ChangePasswordAtLogon for $ADUser: $($_.Exception.Message)"
+                        Add-Content -Path "$WorkingDir\$LogFileName" -Value "Error setting ChangePasswordAtLogon for $ADUser $($_.Exception.Message)"
+                        Write-Verbose "Error setting ChangePasswordAtLogon for $ADUser $($_.Exception.Message)"
                     }
                 }
             }
@@ -96,8 +96,8 @@ function Set-PwExpiresNextLogon {
                     Write-Progress -Activity "Removing Password Expires at Next Logon" -Status "$i of $total" -PercentComplete (($i / $total) * 100)
                     Write-Host "Removing Password Expires at Next Logon flag for: " $ADUser
                     try { Set-ADUser $ADUser -ChangePasswordAtLogon:$False -ErrorAction SilentlyContinue } catch {
-                        Add-Content -Path "$WorkingDir\$LogFileName" -Value "Error clearing ChangePasswordAtLogon for $ADUser: $($_.Exception.Message)"
-                        Write-Verbose "Error clearing ChangePasswordAtLogon for $ADUser: $($_.Exception.Message)"
+                        Add-Content -Path "$WorkingDir\$LogFileName" -Value "Error clearing ChangePasswordAtLogon for $ADUser $($_.Exception.Message)"
+                        Write-Verbose "Error clearing ChangePasswordAtLogon for $ADUser $($_.Exception.Message)"
                     }
                 }
             }
@@ -109,6 +109,7 @@ function Set-PwExpiresNextLogon {
         Write-Host "The log file can be found at $WorkingDir\$LogFileName"
     }
 }
+
 
 ###############################
 ##### Support Functions ######

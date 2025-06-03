@@ -1,0 +1,122 @@
+===================AD RESTORATION===================
+#Clean up metadata
+#Clean up DNS
+===================SYSVOL / DFSR===================
+##Non-Authoritative SYSVOL restore
+#First, try to just set the desired Authoritative (source) and non-authoritative (copy) DCs
+#On the DC that you want to be the source of truth, run these commands
+net stop dfsr
+net stop dfs
+reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\DFSR\Parameters" /v BurFlags /t REG_DWORD /d 1 /f
+net start dfsr
+net start dfs
+#On all other DCs
+net stop dfsr
+net stop dfs
+reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\DFSR\Parameters" /v BurFlags /t REG_DWORD /d 2 /f
+net start dfsr
+net start dfs
+
+#If that does not work, you can re-build the related registry entries on the PDC
+#Verify the path to SysVol
+net share
+#The sysvol path will likely be either C:\Windows\SYSVOL\sysvol or C:\Windows\SYSVOL_DFSR\sysvol
+
+#Verify the sysvol path in each of the below lines
+#Create Registry Keys on PDC:
+reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\DFSR\Parameters\SysVols\Promoting SysVols" /v "Sysvol Information is Committed" /t REG_DWORD /d 1 /f
+reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\DFSR\Parameters\SysVols\Promoting SysVols\<DOMAIN.COM>" /v "Is Primary" /t REG_DWORD /d 1 /f
+reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\DFSR\Parameters\SysVols\Promoting SysVols\<DOMAIN.COM>" /v "Command" /t REG_SZ /d "DcPromo" /f
+reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\DFSR\Parameters\SysVols\Promoting SysVols\<DOMAIN.COM>" /v "Parent Computer" /t REG_SZ /d "" /f
+reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\DFSR\Parameters\SysVols\Promoting SysVols\<DOMAIN.COM>" /v "Replicated Folder Name" /t REG_SZ /d "<DOMAIN.COM>" /f
+reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\DFSR\Parameters\SysVols\Promoting SysVols\<DOMAIN.COM>" /v "Replicated Folder Root" /t REG_SZ /d "C:\\Windows\\SYSVOL\\Domain" /f
+reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\DFSR\Parameters\SysVols\Promoting SysVols\<DOMAIN.COM>" /v "Replicated Folder Root Set" /t REG_SZ /d "C:\\Windows\\SYSVOL\\sysvol\\<DOMAIN.COM>" /f
+reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\DFSR\Parameters\SysVols\Promoting SysVols\<DOMAIN.COM>" /v "Replicated Folder Stage" /t REG_SZ /d "C:\\Windows\\SYSVOL\\staging areas\\<DOMAIN.COM>" /f
+reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\DFSR\Parameters\SysVols\Promoting SysVols\<DOMAIN.COM>" /v "Replication Group Name" /t REG_SZ /d "<DOMAIN.COM>" /f
+reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\DFSR\Parameters\SysVols\Promoting SysVols\<DOMAIN.COM>" /v "Replication Group Type" /t REG_SZ /d "Domain" /f
+
+##Authoritative SYSVOL restore
+#On the Source DC Tell DFSR not to stop replication after detecting an auto recovery scenario
+reg add "HKLM\SYSTEM\CurrentControlSet\Services\DFSR\Parameters" /v StopReplicationOnAutoRecovery /t REG_DWORD /d 0 /f
+repadmin /options localhost -DISABLE_INBOUND_REPL -DISABLE_OUTBOUND_REPL
+
+#On the other DCs clear the replication quarantine, and re-enable AD replication
+reg add "HKLM\SYSTEM\CurrentControlSet\Services\DFSR\Parameters" /v StopReplicationOnAutoRecovery /t REG_DWORD /d 0 /f
+repadmin /options localhost -DISABLE_INBOUND_REPL -DISABLE_OUTBOUND_REPL
+
+#Then set the source and dest devices
+#On the DC that you want to be the source of truth, run these commands
+net stop dfsr
+net stop dfs
+reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\DFSR\Parameters" /v BurFlags /t REG_DWORD /d 1 /f
+net start dfsr
+net start dfs
+#On all other DCs
+net stop dfsr
+net stop dfs
+reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\DFSR\Parameters" /v BurFlags /t REG_DWORD /d 2 /f
+net start dfsr
+net start dfs
+
+
+
+===================NTDS.dit / AD Database===================
+#Check for issues in logs, and with
+dcdiag /v /c /d /e
+
+#Check for replication errors
+repadmin /replsummary
+repadmin /showrepl
+
+#Check for lingering objects
+##Get the guid
+repadmin /showrepl <DcName>
+##Do the check
+repadmin /removelingeringobjects <DCName> <SourceDCGUID> <NC> /advisory_mode
+#Example: repadmin /removelingeringobjects SJN-ADDC01 9de64a77-f73f-4fa0-ae3a-f7b7c195c908 DC=ad,DC=covenanths,DC=org /advisory_mode
+#Remove items if found
+repadmin /removelingeringobjects <DCName> <SourceDCGUID> <NC>
+
+#Allow replication after auto-recovery
+reg add "HKLM\SYSTEM\CurrentControlSet\Services\DFSR\Parameters" /v StopReplicationOnAutoRecovery /t REG_DWORD /d 0 /f
+
+#Re-enable replication manually
+repadmin /options localhost -DISABLE_INBOUND_REPL -DISABLE_OUTBOUND_REPL
+
+#Force replication
+repadmin /syncall /AdeP
+
+#Check status again
+repadmin /replsummary
+
+
+###Restored from backup and getting
+##Netlogon service to pause (preventing logons and SYSVOL sharing)
+##Replication to be disabled
+##FSMO roles to be unvalidated
+##Active Directory Web Services (ADWS) to fail
+
+
+===================End Steps===================
+#Map replication between each DC
+function Invoke-ADSchemaReplicationAllDCs {
+    # Get all domain controllers in the domain
+    $allDCs = Get-ADDomainController -Filter * | Select-Object -ExpandProperty HostName
+
+    # Get the schema naming context
+    $schemaDN = (Get-ADRootDSE).schemaNamingContext
+
+    foreach ($sourceDC in $allDCs) {
+        $targetDCs = $allDCs | Where-Object { $_ -ne $sourceDC }
+        foreach ($target in $targetDCs) {
+            Sync-ADObject -Object (Get-ADObject -Identity $schemaDN) -Source $sourceDC -Destination $target
+        }
+    }
+}
+
+Invoke-ADSchemaReplicationAllDCs
+
+
+#Force replication
+repadmin /syncall /AdeP
+
