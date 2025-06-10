@@ -28,7 +28,8 @@ Uninstall-WindowsFeature AD-Domain-Services -IncludeManagementTools
 
 #####################
 #Repair Domain Trust
-Test-ComputerSecureChannel -Repair -Credential "layer3.admin.ven"
+Test-ComputerSecureChannel -Repair -Server <PDCHere> -Credential "<UsernameHere>"
+# Example: Test-ComputerSecureChannel -Repair -Server "IKAV-FRP-DC01" -Credential "FTadmin"
 
 #########################
 ##Promote to a DC
