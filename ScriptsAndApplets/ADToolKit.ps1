@@ -209,6 +209,7 @@ Function Purge-DNSEntries {
     }
 }
 
+
 #Function to Scan network range
 function Scan-NetworkRange {
 

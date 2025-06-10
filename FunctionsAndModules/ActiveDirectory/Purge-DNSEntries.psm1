@@ -45,4 +45,3 @@ Function Purge-DNSEntries {
         Write-Host "Completed removal of all instances of $PurgeThis."
     }
 }
-
