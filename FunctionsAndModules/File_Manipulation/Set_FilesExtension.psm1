@@ -35,7 +35,7 @@ Function Set-FilesExtension {
         [Parameter(ValueFromPipeline = $True, Mandatory = $true)]
         [String]$FilesToFind,
         [switch]$SearchAllDrives,
-        [ValidatePattern("^[A-Za-z]:\\$")]
+        [ValidatePattern("^[A-Za-z]:\\.*")]
         [String]$CheckThisDisk = "$env:SystemDrive\",
         [String]$NewExtension
     )

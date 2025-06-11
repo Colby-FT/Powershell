@@ -40,7 +40,7 @@ Function Find-FilesByContent {
         [String]$StringToFind,
         [switch]$SearchAllDrives,
         [String]$FileTypeToSearch = ".txt",
-        [ValidatePattern("^[A-Za-z]:\\$")]
+        [ValidatePattern("^[A-Za-z]:\\.*")]
         [String]$CheckThisDisk = "$env:SystemDrive\",
         [int]$MaxFileSizeToSearchInKB = 100
     )
