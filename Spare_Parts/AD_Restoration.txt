@@ -22,18 +22,22 @@ net start dfs
 net share
 #The sysvol path will likely be either C:\Windows\SYSVOL\sysvol or C:\Windows\SYSVOL_DFSR\sysvol
 
-#Verify the sysvol path in each of the below lines
+#Verify the sysvol name, and adjust as needed
+#Replace <DOMAIN.COM> with the domain name
 #Create Registry Keys on PDC:
+$SysvolName = "SYSVOL"
+$DomainName = "<DOMAIN.COM>"
 reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\DFSR\Parameters\SysVols\Promoting SysVols" /v "Sysvol Information is Committed" /t REG_DWORD /d 1 /f
-reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\DFSR\Parameters\SysVols\Promoting SysVols\<DOMAIN.COM>" /v "Is Primary" /t REG_DWORD /d 1 /f
-reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\DFSR\Parameters\SysVols\Promoting SysVols\<DOMAIN.COM>" /v "Command" /t REG_SZ /d "DcPromo" /f
-reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\DFSR\Parameters\SysVols\Promoting SysVols\<DOMAIN.COM>" /v "Parent Computer" /t REG_SZ /d "" /f
-reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\DFSR\Parameters\SysVols\Promoting SysVols\<DOMAIN.COM>" /v "Replicated Folder Name" /t REG_SZ /d "<DOMAIN.COM>" /f
-reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\DFSR\Parameters\SysVols\Promoting SysVols\<DOMAIN.COM>" /v "Replicated Folder Root" /t REG_SZ /d "C:\\Windows\\SYSVOL\\Domain" /f
-reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\DFSR\Parameters\SysVols\Promoting SysVols\<DOMAIN.COM>" /v "Replicated Folder Root Set" /t REG_SZ /d "C:\\Windows\\SYSVOL\\sysvol\\<DOMAIN.COM>" /f
-reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\DFSR\Parameters\SysVols\Promoting SysVols\<DOMAIN.COM>" /v "Replicated Folder Stage" /t REG_SZ /d "C:\\Windows\\SYSVOL\\staging areas\\<DOMAIN.COM>" /f
-reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\DFSR\Parameters\SysVols\Promoting SysVols\<DOMAIN.COM>" /v "Replication Group Name" /t REG_SZ /d "<DOMAIN.COM>" /f
-reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\DFSR\Parameters\SysVols\Promoting SysVols\<DOMAIN.COM>" /v "Replication Group Type" /t REG_SZ /d "Domain" /f
+reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\DFSR\Parameters\SysVols\Promoting SysVols\$DomainName" /v "Is Primary" /t REG_DWORD /d 1 /f
+reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\DFSR\Parameters\SysVols\Promoting SysVols\$DomainName" /v "Command" /t REG_SZ /d "DcPromo" /f
+reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\DFSR\Parameters\SysVols\Promoting SysVols\$DomainName" /v "Parent Computer" /t REG_SZ /d "" /f
+reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\DFSR\Parameters\SysVols\Promoting SysVols\$DomainName" /v "Replicated Folder Name" /t REG_SZ /d "$DomainName" /f
+reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\DFSR\Parameters\SysVols\Promoting SysVols\$DomainName" /v "Replicated Folder Root" /t REG_SZ /d "C:\\Windows\\$SysvolName\\Domain" /f
+reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\DFSR\Parameters\SysVols\Promoting SysVols\$DomainName" /v "Replicated Folder Root Set" /t REG_SZ /d "C:\\Windows\\$SysvolName\\sysvol\\$DomainName" /f
+reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\DFSR\Parameters\SysVols\Promoting SysVols\$DomainName" /v "Replicated Folder Stage" /t REG_SZ /d "C:\\Windows\\$SysvolName\\staging areas\\$DomainName" /f
+reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\DFSR\Parameters\SysVols\Promoting SysVols\$DomainName" /v "Replication Group Name" /t REG_SZ /d "$DomainName" /f
+reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\DFSR\Parameters\SysVols\Promoting SysVols\$DomainName" /v "Replication Group Type" /t REG_SZ /d "Domain" /f
+
 
 ##Authoritative SYSVOL restore
 #On the Source DC Tell DFSR not to stop replication after detecting an auto recovery scenario

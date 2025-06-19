@@ -1320,7 +1320,7 @@ do {
                     Set-ADPasswordFromCSV -CsvName $PwCsvPath -PwLength $PwCharCnt
                 }
                 2{
-                    Set-ADPasswordFromCSV -CsvName "C:\MyFolder\Users.csv" -PwFromCSV
+                    Set-ADPasswordFromCSV -CsvName $PwCsvPath -PwFromCSV
                 }
                 default{
                     Write-Host "Please enter 1 for random passwords, or 2 for passwords from CSV."

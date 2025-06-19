@@ -1,3 +1,13 @@
+#Copy the files from the current folder to the Task Folder.
+$files = @("S1x32.msi","S1x64.msi")
+if(Test-Path "$workingDir\S1x64.msi"){remove-item "$workingDir\S1x64.msi" -Force}
+if(Test-Path "$workingDir\S1x32.msi"){remove-item "$workingDir\S1x32.msi" -Force}
+#if(Test-Path "$workingDir\MsIdVerRootCA.cer"){remove-item "$workingDir\MsIdVerRootCA.cer" -Force}
+
+ForEach($file in $files){
+	Copy-Item .\$file $workingDir\$file -Force
+}
+
 ##Assign variables
 #Assign Company ID
 if([string]::isnullorempty($env:UsrUsrcsCID)){
