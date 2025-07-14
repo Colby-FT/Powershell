@@ -24,6 +24,7 @@ function Set-SupportedTlsProtocols {
     }
     [Net.ServicePointManager]::SecurityProtocol = [Enum]::ToObject([Net.SecurityProtocolType], $supportedProtocols)
 }
+Set-SupportedTlsProtocols
 
 # Define the base URL for downloading functions and modules
 $FuncsandMods = "https://raw.githubusercontent.com/Colby-FT/Powershell/main/FunctionsAndModules/"
