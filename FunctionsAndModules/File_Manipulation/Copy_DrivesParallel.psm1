@@ -39,6 +39,8 @@ function Copy-DrivesParallel {
     )
     Begin {
         $procQueue = @()
+        $spinner = @('|','/','-','\')
+        $spinIndex = 0
     }
     Process {
         foreach ($device in $SourceDevices) {
@@ -56,7 +58,7 @@ function Copy-DrivesParallel {
                     Write-Warning "Skipping ${sourcePath} Path not found or inaccessible."
                     continue
                 }
-                $destPath = Join-Path -Path $DestinationDirectory -ChildPath "$device\$driveLetter"
+                $destPath = Join-Path -Path $DestinationDirectory -ChildPath "$device\Drive-$driveLetter"
                 if (!(Test-Path -Path $destPath)) {
                     try {
                         New-Item -Path $destPath -ItemType Directory | Out-Null
@@ -77,8 +79,6 @@ function Copy-DrivesParallel {
                 }
 
                 # Limit concurrent jobs
-                $spinner = @('|','/','-','\')
-                $spinIndex = 0
                 while ($procQueue.Count -ge $MaxConcurrentJobs) {
                     $procQueue = $procQueue | Where-Object { !$_.HasExited }
                     $runningCount = $procQueue.Count
@@ -90,12 +90,27 @@ function Copy-DrivesParallel {
 
                 # Start robocopy process
                 try {
-                    $arguments = "$sourcePath $destPath /w:1 /r:1 /e /xj /mt:64 /z /log:`"$logPath`" /fp /v"
+                    $arguments = @(
+                        $sourcePath
+                        $destPath
+                        "/w:1"
+                        "/r:1"
+                        "/e"
+                        "/xj"
+                        "/mt:64"
+                        "/z"
+                        "/log:$logPath"
+                        "/fp"
+                        "/v"
+                    )
                     $proc = Start-Process -FilePath "robocopy.exe" -ArgumentList $arguments -NoNewWindow -PassThru
-                    $procQueue += $proc
+                    if ($null -eq $proc) {
+                        throw "Start-Process did not return a process object."
+                    }
                     Write-Host ("Started robocopy for {0}:{1}" -f $device, $driveLetter)
+                    $procQueue += $proc
                 } catch {
-                    Write-Error "Failed to start robocopy process for ${sourcePath}"
+                    Write-Error "Failed to start robocopy process for ${sourcePath}: $_"
                 }
             }
         }
