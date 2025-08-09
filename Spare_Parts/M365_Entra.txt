@@ -1,0 +1,414 @@
+#################################################################################
+#Install the MS Graph PowerShell SDK
+if (-not (Get-Module -ListAvailable -Name Microsoft.Graph)) {
+    Write-Host "Installing Microsoft.Graph module..."
+    Install-Module Microsoft.Graph -Scope CurrentUser
+if (-not (Get-Module -ListAvailable -Name Microsoft.Graph.Identity.SignIns)) {
+    Install-Module Microsoft.Graph.Identity.SignIns -Scope CurrentUser
+    Write-Host "Microsoft.Graph module installed successfully."
+}
+if (-not (Get-Module -ListAvailable -Name Microsoft.Graph.Groups)) {
+    Install-Module Microsoft.Graph.Groups -Scope CurrentUser
+    Write-Host "Microsoft.Graph module installed successfully."
+} 
+else {
+    Write-Host "MS Graph modules already installed."
+}
+Import-Module Microsoft.Graph.Identity.SignIns
+Import-Module Microsoft.Graph.Groups
+#################################################################################
+
+#################################################################################
+#Connect to Microsoft Graph with read/Write
+Connect-MgGraph -Scopes "User.ReadWrite.All", "Directory.ReadWrite.All", "UserAuthenticationMethod.ReadWrite.All", "Policy.Read.All", "Group.ReadWrite.All"
+
+#Connect to Microsoft Graph with read
+Connect-MgGraph -Scopes "User.Read.All", "Directory.Read.All", "UserAuthenticationMethod.Read.All", "Policy.Read.All", "Group.Read.All"
+#################################################################################
+
+#################################################################################
+#Check if MFA is enforced globally
+Get-MgAuthenticationMethodsPolicy
+
+#Check MFA status for a user
+$user = "fttest1@stpaulmn.onmicrosoft.com"
+Get-MgUserAuthenticationMethod -UserId $user
+
+#################################################################################
+#Set the same password for an array of users
+Connect-MgGraph -Scopes "User.ReadWrite.All"
+
+# Configuration
+$users = @("fttest1@stpaulmn.onmicrosoft.com")
+$newPassword = "Cuyo5459"
+$dryRun = $true
+$logPath = "C:\Path\To\Your\PasswordLog.txt"
+
+# Do the thing
+foreach ($user in $users) {
+    $params = @{
+        PasswordProfile = @{
+            Password = $newPassword
+            ForceChangePasswordNextSignIn = $true
+        }
+    }
+
+    if ($dryRun) {
+        Write-Host "[Dry Run] Would set password for user $user"
+        Add-Content -Path $logPath -Value "[Dry Run] Would set password for user $user"
+    } else {
+        try {
+            Update-MgUser -UserId $user -BodyParameter $params
+            Write-Host -ForegroundColor Green "Password set successfully for user $user"
+            Add-Content -Path $logPath -Value "Password set successfully for user $user"
+        } catch {
+            Write-Host -ForegroundColor Red "Failed to set password for user $user. Error: $_"
+            Add-Content -Path $logPath -Value "Failed to set password for user $user. Error: $_"
+        }
+    }
+}
+
+#################################################################################
+
+#################################################################################
+#Set an array of users' passwords with corresponding array of passwords
+# Connect to Microsoft Graph
+Connect-MgGraph -Scopes "User.ReadWrite.All"
+
+# Configuration
+$users = @("fttest1@stpaulmn.onmicrosoft.com", "fttest2@stpaulmn.onmicrosoft.com")
+$passwords = @("Cuyo5459", "Zeta8821")
+$dryRun = $true
+$logPath = "C:\Path\To\Your\PasswordLog.txt"
+
+# Do the thing
+if ($users.Count -ne $passwords.Count) {
+    Write-Host "Error: The number of users and passwords must match."
+    return
+}
+
+for ($i = 0; $i -lt $users.Count; $i++) {
+    $user = $users[$i]
+    $newPassword = $passwords[$i]
+
+    $params = @{
+        PasswordProfile = @{
+            Password = $newPassword
+            ForceChangePasswordNextSignIn = $true
+        }
+    }
+
+    if ($dryRun) {
+        Write-Host "[Dry Run] Would set password for user $user"
+        Add-Content -Path $logPath -Value "[Dry Run] Would set password for user $user"
+    } else {
+        try {
+            Update-MgUser -UserId $user -BodyParameter $params
+            Write-Host -ForegroundColor Green "Password set successfully for user $user"
+            Add-Content -Path $logPath -Value "Password set successfully for user $user"
+        } catch {
+            Write-Host -ForegroundColor Red "Failed to set password for user $user. Error: $_"
+            Add-Content -Path $logPath -Value "Failed to set password for user $user. Error: $_"
+        }
+    }
+}
+
+#################################################################################
+
+##################################################################################
+#Set users' passwords from a CSV file
+# The CSV should have headers: UPN, Password
+# Connect to Microsoft Graph
+Connect-MgGraph -Scopes "User.ReadWrite.All"
+
+# Configuration
+$csvPath = "C:\Path\To\Your\File.csv"
+$logPath = "C:\Path\To\Your\PasswordLog.txt"
+$dryRun = $true
+
+# Do the thing
+$userData = Import-Csv -Path $csvPath
+
+foreach ($entry in $userData) {
+    $user = $entry.UPN
+    $newPassword = $entry.Password
+
+    $params = @{
+        PasswordProfile = @{
+            Password = $newPassword
+            ForceChangePasswordNextSignIn = $true
+        }
+    }
+
+    if ($dryRun) {
+        Write-Host "[Dry Run] Would set password for user $user"
+        Add-Content -Path $logPath -Value "[Dry Run] Would set password for user $user"
+    } else {
+        try {
+            Update-MgUser -UserId $user -BodyParameter $params
+            Write-Host -ForegroundColor Green "Password set successfully for user $user"
+            Add-Content -Path $logPath -Value "Password set successfully for user $user"
+        } catch {
+            Write-Host -ForegroundColor Red "Failed to set password for user $user. Error: $_"
+            Add-Content -Path $logPath -Value "Failed to set password for user $user. Error: $_"
+        }
+    }
+}
+
+#################################################################################
+
+#################################################################################
+##Get any users not in an MFA enforced group if using Conditional Access
+#Get All Conditional Access Policies
+Connect-MgGraph -Scopes "Policy.Read.All", "Group.Read.All"
+
+$policies = Get-MgIdentityConditionalAccessPolicy | Where-Object {
+    $_.Conditions -and $_.GrantControls.BuiltInControls -contains "mfa"
+}
+
+#Extract the groups from the policies
+$groupIds = $policies.Conditions.Users.IncludeGroups
+
+#Get the members of the groups
+$enforcedUsers = foreach ($groupId in $groupIds) {
+    Get-MgGroupMember -GroupId $groupId -All | Where-Object {
+        $_.AdditionalProperties.'@odata.type' -eq '#microsoft.graph.user'
+    } | Select-Object -ExpandProperty Id
+}
+
+#Get all users in the tenant
+$allUsers = Get-MgUser -All | Select-Object Id, UserPrincipalName
+
+#Compare the lists to find users not in any enforced group
+$unenforcedUsers = $allUsers | Where-Object {
+    $enforcedUsers -notcontains $_.Id
+}
+
+$unenforcedUsers | Select-Object UserPrincipalName
+
+#Export to CSV
+$unenforcedUsers | Export-Csv -Path "C:\FT\SPC-UsersWithoutMFAEnforcement.csv" -NoTypeInformation
+#################################################################################
+
+#################################################################################
+#Remove all authentication methods for an array of users
+# Connect to Microsoft Graph
+Connect-MgGraph -Scopes "User.ReadWrite.All", "Directory.ReadWrite.All", "UserAuthenticationMethod.ReadWrite.All", "Policy.Read.All", "Group.ReadWrite.All"
+
+# Configuration
+$users = @("fttest1@stpaulmn.onmicrosoft.com")  # Array of user UPNs
+$logPath = "C:\Path\To\Your\Log.txt"            # Path to your log file
+$dryRun = $true                                 # Set to $false to actually remove methods
+
+
+foreach ($user in $users) {
+    $authMethods = Get-MgUserAuthenticationMethod -UserId $user
+
+    foreach ($method in $authMethods) {
+        $id = $method.Id
+        $type = $method.AdditionalProperties["@odata.type"]
+
+        switch ($type) {
+            "#microsoft.graph.microsoftAuthenticatorAuthenticationMethod" {
+                if ($dryRun) {
+                    Write-Host "[Dry Run] Would remove Microsoft Authenticator method for user $user"
+                    Add-Content -Path $logPath -Value "[Dry Run] Microsoft Authenticator method for $user (ID: $id)"
+                } else {
+                    Remove-MgUserAuthenticationMicrosoftAuthenticatorMethod -UserId $user -MicrosoftAuthenticatorAuthenticationMethodId $id
+                    Write-Host -ForegroundColor Green "Removed Microsoft Authenticator method for user $user"
+                    Add-Content -Path $logPath -Value "Removed Microsoft Authenticator method for $user (ID: $id)"
+                }
+            }
+
+            "#microsoft.graph.emailAuthenticationMethod" {
+                if ($dryRun) {
+                    Write-Host "[Dry Run] Would remove Email method for user $user"
+                    Add-Content -Path $logPath -Value "[Dry Run] Email method for $user (ID: $id)"
+                } else {
+                    Remove-MgUserAuthenticationEmailMethod -UserId $user -EmailAuthenticationMethodId $id
+                    Write-Host -ForegroundColor Green "Removed Email method for user $user"
+                    Add-Content -Path $logPath -Value "Removed Email method for $user (ID: $id)"
+                }
+            }
+
+            "#microsoft.graph.fido2AuthenticationMethod" {
+                if ($dryRun) {
+                    Write-Host "[Dry Run] Would remove FIDO2 method for user $user"
+                    Add-Content -Path $logPath -Value "[Dry Run] FIDO2 method for $user (ID: $id)"
+                } else {
+                    Remove-MgUserAuthenticationFido2Method -UserId $user -Fido2AuthenticationMethodId $id
+                    Write-Host -ForegroundColor Green "Removed FIDO2 method for user $user"
+                    Add-Content -Path $logPath -Value "Removed FIDO2 method for $user (ID: $id)"
+                }
+            }
+
+            "#microsoft.graph.phoneAuthenticationMethod" {
+                if ($dryRun) {
+                    Write-Host "[Dry Run] Would remove Phone method for user $user"
+                    Add-Content -Path $logPath -Value "[Dry Run] Phone method for $user (ID: $id)"
+                } else {
+                    Remove-MgUserAuthenticationPhoneMethod -UserId $user -PhoneAuthenticationMethodId $id
+                    Write-Host -ForegroundColor Green "Removed Phone method for user $user"
+                    Add-Content -Path $logPath -Value "Removed Phone method for $user (ID: $id)"
+                }
+            }
+
+            "#microsoft.graph.softwareOathAuthenticationMethod" {
+                if ($dryRun) {
+                    Write-Host "[Dry Run] Would remove Software OATH method for user $user"
+                    Add-Content -Path $logPath -Value "[Dry Run] Software OATH method for $user (ID: $id)"
+                } else {
+                    Remove-MgUserAuthenticationSoftwareOathMethod -UserId $user -SoftwareOathAuthenticationMethodId $id
+                    Write-Host -ForegroundColor Green "Removed Software OATH method for user $user"
+                    Add-Content -Path $logPath -Value "Removed Software OATH method for $user (ID: $id)"
+                }
+            }
+
+            "#microsoft.graph.temporaryAccessPassAuthenticationMethod" {
+                if ($dryRun) {
+                    Write-Host "[Dry Run] Would remove Temporary Access Pass method for user $user"
+                    Add-Content -Path $logPath -Value "[Dry Run] Temporary Access Pass method for $user (ID: $id)"
+                } else {
+                    Remove-MgUserAuthenticationTemporaryAccessPassMethod -UserId $user -TemporaryAccessPassAuthenticationMethodId $id
+                    Write-Host -ForegroundColor Green "Removed Temporary Access Pass method for user $user"
+                    Add-Content -Path $logPath -Value "Removed Temporary Access Pass method for $user (ID: $id)"
+                }
+            }
+
+            "#microsoft.graph.windowsHelloForBusinessAuthenticationMethod" {
+                if ($dryRun) {
+                    Write-Host "[Dry Run] Would remove Windows Hello for Business method for user $user"
+                    Add-Content -Path $logPath -Value "[Dry Run] Windows Hello for Business method for $user (ID: $id)"
+                } else {
+                    Remove-MgUserAuthenticationWindowsHelloForBusinessMethod -UserId $user -WindowsHelloForBusinessAuthenticationMethodId $id
+                    Write-Host -ForegroundColor Green "Removed Windows Hello for Business method for user $user"
+                    Add-Content -Path $logPath -Value "Removed Windows Hello for Business method for $user (ID: $id)"
+                }
+            }
+
+            default {
+                Write-Host -ForegroundColor Yellow "Unknown method type $type for ID $id"
+                Add-Content -Path $logPath -Value "Unknown method type $type for $user (ID: $id)"
+            }
+        }
+    }
+}
+#################################################################################
+
+#################################################################################
+# Remove all authentication methods from a CSV file of users
+# The CSV should have the column header: UPN
+
+# Connect to Microsoft Graph
+Connect-MgGraph -Scopes "User.ReadWrite.All", "Directory.ReadWrite.All", "UserAuthenticationMethod.ReadWrite.All", "Policy.Read.All", "Group.ReadWrite.All"
+
+# Configuration
+$csvPath = "C:\FT\Entra.csv"           # Path to your CSV file
+$logPath = "C:\FT\MFALog2.txt"            # Path to your log file
+$dryRun = $false                               # Set to $false to actually remove methods
+
+# Import users
+$userData = Import-Csv -Path $csvPath
+
+foreach ($entry in $userData) {
+    $user = $entry.UPN
+    $authMethods = Get-MgUserAuthenticationMethod -UserId $user
+
+    foreach ($method in $authMethods) {
+        $id = $method.Id
+        $type = $method.AdditionalProperties["@odata.type"]
+
+        switch ($type) {
+            "#microsoft.graph.microsoftAuthenticatorAuthenticationMethod" {
+                if ($dryRun) {
+                    Write-Host "[Dry Run] Would remove Microsoft Authenticator method for user $user"
+                    Add-Content -Path $logPath -Value "[Dry Run] Microsoft Authenticator method for $user (ID: $id)"
+                } else {
+                    Remove-MgUserAuthenticationMicrosoftAuthenticatorMethod -UserId $user -MicrosoftAuthenticatorAuthenticationMethodId $id
+                    Write-Host -ForegroundColor Green "Removed Microsoft Authenticator method for user $user"
+                    Add-Content -Path $logPath -Value "Removed Microsoft Authenticator method for $user (ID: $id)"
+                }
+            }
+
+            "#microsoft.graph.emailAuthenticationMethod" {
+                if ($dryRun) {
+                    Write-Host "[Dry Run] Would remove Email method for user $user"
+                    Add-Content -Path $logPath -Value "[Dry Run] Email method for $user (ID: $id)"
+                } else {
+                    Remove-MgUserAuthenticationEmailMethod -UserId $user -EmailAuthenticationMethodId $id
+                    Write-Host -ForegroundColor Green "Removed Email method for user $user"
+                    Add-Content -Path $logPath -Value "Removed Email method for $user (ID: $id)"
+                }
+            }
+
+            "#microsoft.graph.fido2AuthenticationMethod" {
+                if ($dryRun) {
+                    Write-Host "[Dry Run] Would remove FIDO2 method for user $user"
+                    Add-Content -Path $logPath -Value "[Dry Run] FIDO2 method for $user (ID: $id)"
+                } else {
+                    Remove-MgUserAuthenticationFido2Method -UserId $user -Fido2AuthenticationMethodId $id
+                    Write-Host -ForegroundColor Green "Removed FIDO2 method for user $user"
+                    Add-Content -Path $logPath -Value "Removed FIDO2 method for $user (ID: $id)"
+                }
+            }
+
+            "#microsoft.graph.phoneAuthenticationMethod" {
+                if ($dryRun) {
+                    Write-Host "[Dry Run] Would remove Phone method for user $user"
+                    Add-Content -Path $logPath -Value "[Dry Run] Phone method for $user (ID: $id)"
+                } else {
+                    Remove-MgUserAuthenticationPhoneMethod -UserId $user -PhoneAuthenticationMethodId $id
+                    Write-Host -ForegroundColor Green "Removed Phone method for user $user"
+                    Add-Content -Path $logPath -Value "Removed Phone method for $user (ID: $id)"
+                }
+            }
+
+            "#microsoft.graph.softwareOathAuthenticationMethod" {
+                if ($dryRun) {
+                    Write-Host "[Dry Run] Would remove Software OATH method for user $user"
+                    Add-Content -Path $logPath -Value "[Dry Run] Software OATH method for $user (ID: $id)"
+                } else {
+                    Remove-MgUserAuthenticationSoftwareOathMethod -UserId $user -SoftwareOathAuthenticationMethodId $id
+                    Write-Host -ForegroundColor Green "Removed Software OATH method for user $user"
+                    Add-Content -Path $logPath -Value "Removed Software OATH method for $user (ID: $id)"
+                }
+            }
+
+            "#microsoft.graph.temporaryAccessPassAuthenticationMethod" {
+                if ($dryRun) {
+                    Write-Host "[Dry Run] Would remove Temporary Access Pass method for user $user"
+                    Add-Content -Path $logPath -Value "[Dry Run] Temporary Access Pass method for $user (ID: $id)"
+                } else {
+                    Remove-MgUserAuthenticationTemporaryAccessPassMethod -UserId $user -TemporaryAccessPassAuthenticationMethodId $id
+                    Write-Host -ForegroundColor Green "Removed Temporary Access Pass method for user $user"
+                    Add-Content -Path $logPath -Value "Removed Temporary Access Pass method for $user (ID: $id)"
+                }
+            }
+
+            "#microsoft.graph.windowsHelloForBusinessAuthenticationMethod" {
+                if ($dryRun) {
+                    Write-Host "[Dry Run] Would remove Windows Hello for Business method for user $user"
+                    Add-Content -Path $logPath -Value "[Dry Run] Windows Hello for Business method for $user (ID: $id)"
+                } else {
+                    Remove-MgUserAuthenticationWindowsHelloForBusinessMethod -UserId $user -WindowsHelloForBusinessAuthenticationMethodId $id
+                    Write-Host -ForegroundColor Green "Removed Windows Hello for Business method for user $user"
+                    Add-Content -Path $logPath -Value "Removed Windows Hello for Business method for $user (ID: $id)"
+                }
+            }
+
+            default {
+                Write-Host -ForegroundColor Yellow "Unknown method type $type for ID $id"
+                Add-Content -Path $logPath -Value "Unknown method type $type for $user (ID: $id)"
+            }
+        }
+    }
+}
+
+#################################################################################
+
+
+
+
+#https://myaccount.microsoft.com/?ref=MeControl
+#Username: fttest1@stpaulmn.onmicrosoft.com
+#Password: SpaceMonkey45%

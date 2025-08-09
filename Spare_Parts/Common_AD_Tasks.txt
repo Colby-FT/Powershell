@@ -29,7 +29,7 @@ Uninstall-WindowsFeature AD-Domain-Services -IncludeManagementTools
 #####################
 #Repair Domain Trust
 Test-ComputerSecureChannel -Repair -Server <PDCHere> -Credential "<UsernameHere>"
-# Example: Test-ComputerSecureChannel -Repair -Server "IKAV-FRP-DC01" -Credential "FTadmin"
+# Example: Test-ComputerSecureChannel -Repair -Server "DC01" -Credential "FTadmin"
 
 #########################
 ##Promote to a DC
@@ -51,7 +51,7 @@ wmic computersystem where name="%computername%" call joindomainorworkgroup name=
 #################################
 #Repair domain trust with NetDom
 netdom resetpwd /Server:<DCName> /UserD:<AdminUN> /PasswordD:<AdminPW>
-Example: netdom resetpwd /Server:FHHDC02 /UserD:ftadmin /PasswordD:SpaceMonkey45%
+Example: netdom resetpwd /Server:DC02 /UserD:ftadmin /PasswordD:Password1!
 
 #################################
 #Force replication between specific DCs

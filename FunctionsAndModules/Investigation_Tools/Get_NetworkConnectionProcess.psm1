@@ -73,7 +73,8 @@ function Get-NetworkConnectionProcess {
         if ($IncludeAttemptedConnections) {
             foreach ($IPAddress in $IPAddresses) {
                 try {
-                    $events = Get-WinEvent -LogName Security -FilterXPath "*[System[EventID=5156]]" -ErrorAction Stop |
+                    $events = Get-WinEvent -LogName Security -ErrorAction Stop |
+          Where-Object { $_.Message -match $IPAddress } |
                               Where-Object { $_.Message -match $IPAddress }
 
                     foreach ($event in $events) {

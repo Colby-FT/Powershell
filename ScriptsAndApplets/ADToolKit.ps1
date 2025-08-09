@@ -513,12 +513,15 @@ function Set-ADPasswordFromCSV {
 
     .PARAMETER CsvName
     Enter the path to a csv with the list of Sam Account Names, and passwords if applicable.
-    The default is to title the username column SamAccountName and the passwords column Password. This can be overidden with the UserNameColumnTitle, and PwColumnTitle parameters.
+    The default is to title the username column SamAccountName and the passwords column Password. This can be overridden with the UserNameColumnTitle, and PwColumnTitle parameters.
+
     .PARAMETER ProjectFolder
     The default is $env:SystemDrive\FT
+
     .PARAMETER PwFromCSV
     A switch to determine if the passwords should be generated or provided in the CSV.
     If the switch is enabled a Password column must be included in the CSV.
+
     .PARAMETER UserNameColumnTitle
     .PARAMETER PwColumnTitle
     .PARAMETER LogFileName
@@ -530,13 +533,12 @@ function Set-ADPasswordFromCSV {
     Sets random 14 character passwords for all users listed in Users.csv
 
     .EXAMPLE
-    Set-ADPasswordFromCSV -CsvName "C:\MyFolder\Users.csv" -PwLength 22
+    Set-ADPasswordFromCSV -CsvName "C:\FT\pwresets\test.csv" -PwLength 22
     Sets a 22 character password
 
     .EXAMPLE
     Set-ADPasswordFromCSV -CsvName "C:\MyFolder\Users.csv" -PwFromCSV
     Sets the passwords provided in the CSV
-
     #>
     [CmdletBinding()]
     param (
@@ -548,7 +550,8 @@ function Set-ADPasswordFromCSV {
         [String]$UserNameColumnTitle = "SamAccountName",
         [String]$PwColumnTitle = "Password",
         [String]$LogFileName = "ResetUserPasswords.log",
-        [Int]$PwLength = 14
+        [Int]$PwLength = 14,
+        [String]$OutputCsv = "$ProjectFolder\UpdatedPasswords.csv"
     )
     Begin {
         try {
@@ -560,36 +563,56 @@ function Set-ADPasswordFromCSV {
         }
         Import-Module ActiveDirectory -ErrorAction SilentlyContinue
         $WorkingDir = Set-ProjectFolder -baseDir $ProjectFolder
-        Write-Host "For errors check log file at $WorkingDir\$LogFileName, or run with -Verbose for more details."
+        Write-Host " "
+        Write-Host -ForegroundColor Yellow "For errors check log file at $WorkingDir\$LogFileName, or run with -Verbose for more details."
+        Write-Host " "
         Start-Transcript -Path "$WorkingDir\$LogFileName" -Append
     }
     Process {
         $total = $UserNamesList.Count
         $i = 0
-        if(!($PwFromCSV)){
+
+        if (!($PwFromCSV)) {
+            $UpdatedUserList = @()
+
             foreach ($User in $UserNamesList) {
                 $i++
                 $ADUser = $User.$UserNameColumnTitle
                 $ADPW = Get-RandomString -length $PwLength
-                $password = ConvertTo-SecureString -AsPlainText $ADPW -force
+                $password = ConvertTo-SecureString -AsPlainText $ADPW -Force
                 Write-Verbose "Setting Password for $ADUser to $ADPW"
                 Write-Progress -Activity "Setting random passwords from CSV" -Status "$i of $total" -PercentComplete (($i / $total) * 100)
+
                 try {
                     Set-ADAccountPassword $ADUser -NewPassword $password -Reset -ErrorAction SilentlyContinue
+                    $PulledUser = Get-ADUser -Identity $ADUser -Properties EmailAddress
+                    $UpdatedUserList += [PSCustomObject]@{
+                        Name = if ($PulledUser) { $PulledUser.Name } else { "Not Found" }
+                        $UserNameColumnTitle = $ADUser
+                        $PwColumnTitle       = $ADPW
+                        EmailAddress   = if ($PulledUser) { $PulledUser.EmailAddress } else { "Not Found" }
+                    }
                 } catch {
                     Add-Content -Path "$WorkingDir\$LogFileName" -Value "Error setting password for $ADUser $($_.Exception.Message)"
                     Write-Verbose "Error setting password for $ADUser $($_.Exception.Message)"
                 }
             }
+
+            # Export the updated list with passwords to a new CSV
+            #$OutputCsv = Join-Path $WorkingDir "UpdatedPasswords.csv"
+            $UpdatedUserList | Export-Csv -Path $OutputCsv -NoTypeInformation
+            Write-Host " "
+            Write-Host -ForegroundColor Green "Updated passwords saved to $OutputCsv"
         }
-        else{
+        else {
             foreach ($User in $UserNamesList) {
                 $i++
                 $ADUser = $User.$UserNameColumnTitle
                 $ADPW = $User.$PwColumnTitle
-                $password = ConvertTo-SecureString -AsPlainText $ADPW -force
+                $password = ConvertTo-SecureString -AsPlainText $ADPW -Force
                 Write-Verbose "Setting Password for $ADUser to $ADPW"
                 Write-Progress -Activity "Setting provided passwords from CSV" -Status "$i of $total" -PercentComplete (($i / $total) * 100)
+
                 try {
                     Set-ADAccountPassword $ADUser -NewPassword $password -Reset -ErrorAction SilentlyContinue
                 } catch {
@@ -598,11 +621,14 @@ function Set-ADPasswordFromCSV {
                 }
             }
         }
+
         Write-Progress -Activity "Processing Complete" -Completed
     }
     End {
+        Write-Host " "
         Stop-Transcript
-        Write-Host "The log file can be found at $WorkingDir\$LogFileName"
+        Write-Host " "
+        Write-Host -ForeGroundColor Yellow "The log file can be found at $WorkingDir\$LogFileName"
     }
 }
 
@@ -1309,15 +1335,21 @@ do {
         }
         #Set pw (Complete)
         3 {
-            $PwCsvPath = Read-Host "Enter the path to the CSV with the list of SAM Account Names: "
-            $CsvOrRand = Read-Host "Would you like to:
+            Write-Host -ForegroundColor Yellow "Be sure the column title with the SAM Account Names is 'SAMAccountName' in the CSV file."
+            $PwCsvPath = Read-Host "Enter the path to the CSV with the list of SAM Account Names"
+            $CsvOrRand = Read-Host "Would you like to
             1 - Generate random passwords
-            2 - Use passwords listed in the CSV"
+            2 - Use passwords listed in the CSV
+            "
 
             switch ($CsvOrRand){
                 1{
+                $CSVOut = Read-Host "Enter the path you want to use for the output CSV file with passwords. Leave blank to use the default C:\FT\UpdatedPasswords.csv"
+                if ([string]::IsNullOrEmpty($CSVOut)){
+                    $CSVOut = "$env:SystemDrive\FT\UpdatedPasswords.csv"
+                }
                     [int]$PwCharCnt = Read-Host "How many characters should the password be: "
-                    Set-ADPasswordFromCSV -CsvName $PwCsvPath -PwLength $PwCharCnt
+                    Set-ADPasswordFromCSV -CsvName $PwCsvPath -PwLength $PwCharCnt -OutputCsv $CSVOut
                 }
                 2{
                     Set-ADPasswordFromCSV -CsvName $PwCsvPath -PwFromCSV
