@@ -1,3 +1,14 @@
+#Get install date of an app
+Get-ItemProperty HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*, HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\* | Where-Object { $_.DisplayName -like "*" } | Select-Object DisplayName, InstallDate
+
+#Get Uninstall date of applications
+Get-WinEvent -LogName Application | Where-Object {$_.Message -like "*Removal completed*" -or $_.Message -like "*Product: * was removed*"} | Select-Object TimeCreated, Message
+
+#Get Apps uninstalled in last 7 days
+$startDate = (Get-Date).AddDays(-7)
+Get-WinEvent -LogName Application | Where-Object {$_.TimeCreated -ge $startDate -and $_.Message -like "*Removal completed*"} | Select-Object TimeCreated, Message
+
+
 #Copy the files from the current folder to the Task Folder.
 $files = @("S1x32.msi","S1x64.msi")
 if(Test-Path "$workingDir\S1x64.msi"){remove-item "$workingDir\S1x64.msi" -Force}
