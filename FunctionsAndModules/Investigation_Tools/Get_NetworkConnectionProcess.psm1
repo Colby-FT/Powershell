@@ -73,15 +73,15 @@ function Get-NetworkConnectionProcess {
         if ($IncludeAttemptedConnections) {
             foreach ($IPAddress in $IPAddresses) {
                 try {
-                    $events = Get-WinEvent -LogName Security -ErrorAction Stop |
+                    $FoundItems = Get-WinEvent -LogName Security -ErrorAction Stop |
           Where-Object { $_.Message -match $IPAddress } |
                               Where-Object { $_.Message -match $IPAddress }
 
-                    foreach ($event in $events) {
-                        $localAddress = if ($event.Message -match 'Source Address:\s+(\S+)') { $matches[1] } else { $null }
-                        $localPort = if ($event.Message -match 'Source Port:\s+(\d+)') { $matches[1] } else { $null }
-                        $remoteAddress = if ($event.Message -match 'Destination Address:\s+(\S+)') { $matches[1] } else { $null }
-                        $remotePort = if ($event.Message -match 'Destination Port:\s+(\d+)') { $matches[1] } else { $null }
+                    foreach ($EventItems in $FoundItems) {
+                        $localAddress = if ($EventItems.Message -match 'Source Address:\s+(\S+)') { $matches[1] } else { $null }
+                        $localPort = if ($EventItems.Message -match 'Source Port:\s+(\d+)') { $matches[1] } else { $null }
+                        $remoteAddress = if ($EventItems.Message -match 'Destination Address:\s+(\S+)') { $matches[1] } else { $null }
+                        $remotePort = if ($EventItems.Message -match 'Destination Port:\s+(\d+)') { $matches[1] } else { $null }
 
                         $results += [PSCustomObject]@{
                             LocalAddress  = $localAddress

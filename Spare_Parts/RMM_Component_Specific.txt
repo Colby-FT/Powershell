@@ -26,19 +26,18 @@
     ##Do the thing
     $OutputValue = Get-EventLogByTimeRange -LogName $env:usrLogName -StartDate $env:usrStartDate -EndDate $env:usrEndDate -Level $env:usrEventLevel -EventID $EventIDnumber
 
-    ##Output to either UDF or standard out
-    if($env:OutputToUDF){
-        if($OutputValue){
-            New-ItemProperty -Path HKLM:\SOFTWARE\Centrastage -Name "Custom$env:UDFNumber" -PropertyType String -Value "$OutputValue" -Force | out-null;
-        }
-        else{
-            Write-host "Nothing found"
-            return
-        }
+##Output to either UDF or standard out
+if($env:OutputToUDF -eq 'true'){
+    if($OutputValue){
+        New-ItemProperty -Path HKLM:\SOFTWARE\Centrastage -Name "Custom$env:UDFNumber" -PropertyType String -Value "$OutPutValue" -Force | out-null;
     }
     else{
-        Return $OutputValue
+        Write-host "Nothing found"
+        return
     }
+}else{
+    return $OutputValue
+}
 
 
     ########################################################
@@ -66,7 +65,7 @@
         }
     }
     else{
-        Write-Host $OutputValue
+        return $OutputValue
     }
 
 

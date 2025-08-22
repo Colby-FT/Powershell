@@ -15,14 +15,17 @@ if (-not (Get-Module -ListAvailable -Name Microsoft.Graph.Groups)) {
 if (-not (Get-Module -ListAvailable -Name Microsoft.Graph.Users.Actions)) {
     Install-Module Microsoft.Graph.Users.Actions -Scope CurrentUser
     Write-Host "Microsoft.Graph.Users.Actions module installed successfully."
-}  
-else {
+}  else {
     Write-Host "MS Graph modules already installed."
 }
 Import-Module Microsoft.Graph.Identity.SignIns
 Import-Module Microsoft.Graph.Groups
 Import-Module Microsoft.Graph.Users.Actions
 #################################################################################
+#################################################################################
+#Remember to use the disconnect command when finished, or it will auto-connect back to that same tenant next time you run a command.
+Disconnect-MgGraph
+###################################################################################
 
 #################################################################################
 #Connect to Microsoft Graph with read/Write
@@ -30,6 +33,100 @@ Connect-MgGraph -Scopes "User.ReadWrite.All", "Directory.ReadWrite.All", "UserAu
 
 #Connect to Microsoft Graph with read
 Connect-MgGraph -Scopes "User.Read.All", "Directory.Read.All", "UserAuthenticationMethod.Read.All", "Policy.Read.All", "Group.Read.All"
+#################################################################################
+
+#################################################################################
+#Check if security defaults are enabled
+Connect-MgGraph -Scopes "Policy.Read.All"
+Get-MgPolicyIdentitySecurityDefaultEnforcementPolicy | Select-Object -Property DisplayName, Id, IsEnabled
+
+#List allowed authentication methods
+Connect-MgGraph -Scopes "Policy.Read.All"
+Get-MgPolicyAuthenticationMethodPolicy | Select-Object -Property DisplayName, PolicyVersion, AuthenticationMethodConfigurations
+
+#Check if there are any Conditional Access Policies
+$policies = Get-MgIdentityConditionalAccessPolicy
+if ($policies.Count -gt 0) {
+    Write-host -ForegroundColor DarkGreen "$policies.Count Conditional Access policies found."
+} else {
+    Write-Host -ForegroundColor DarkYellow "No Conditional Access policies found."
+}
+
+#Check MFA status for a user
+$userUPN= "fttest1@stpaulmn.onmicrosoft.com"
+Get-MgUserAuthenticationMethod -UserId $userUPN
+#################################################################################
+#################################################################################
+#Check MFA status for all users
+Connect-MgGraph -Scopes "User.Read.All", "UserAuthenticationMethod.Read.All"
+$results = @()
+$allUsers = Get-MgUser -All
+
+foreach ($userObj in $allUsers) {
+    $userUPN = $userObj.UserPrincipalName
+    $userName = $userObj.DisplayName
+    $authMethods = Get-MgUserAuthenticationMethod -UserId $userUPN
+
+    $mfaMethods = @()
+    if ($authMethods) {
+        $nonPasswordMethods = $authMethods | Where-Object {
+            $_.AdditionalProperties["@odata.type"] -ne "#microsoft.graph.passwordAuthenticationMethod"
+        }
+
+        if ($nonPasswordMethods.Count -gt 0) {
+            foreach ($method in $nonPasswordMethods) {
+                $type = $method.AdditionalProperties["@odata.type"]
+                $mfaMethods += $type
+            }
+        }
+    }
+
+    $status = if ($mfaMethods.Count -gt 0) { "MFA Enabled" } else { "No MFA" }
+    $methodsString = if ($mfaMethods.Count -gt 0) { $mfaMethods -join ", " } else { "None" }
+
+    $results += [PSCustomObject]@{
+        DisplayName = $userName
+        UserPrincipalName = $userUPN
+        MFAStatus = $status
+        MFAMethods = $methodsString
+    }
+}
+
+# Export to CSV
+$results | Export-Csv -Path "c:\ft\SoundPharma-MFA_Status_Report.csv" -NoTypeInformation
+
+###################################################################################
+#################################################################################
+##Get any users not in an MFA enforced group if using Conditional Access Policies
+#Get All Conditional Access Policies
+Connect-MgGraph -Scopes "User.Read.All", "Policy.Read.All", "Group.Read.All"
+
+$policies = Get-MgIdentityConditionalAccessPolicy | Where-Object {
+    $_.Conditions -and $_.GrantControls.BuiltInControls -contains "mfa"
+}
+
+#Extract the groups from the policies
+$groupIds = $policies.Conditions.Users.IncludeGroups
+
+#Get the members of the groups
+$enforcedUsers = foreach ($groupId in $groupIds) {
+    Get-MgGroupMember -GroupId $groupId -All | Where-Object {
+        $_.AdditionalProperties.'@odata.type' -eq '#microsoft.graph.user'
+    } | Select-Object -ExpandProperty Id
+}
+
+#Get all users in the tenant
+$allUsers = Get-MgUser -All | Select-Object Id, UserPrincipalName
+
+#Compare the lists to find users not in any enforced group
+$unenforcedUsers = $allUsers | Where-Object {
+    $enforcedUsers -notcontains $_.Id
+}
+
+$unenforcedUsers | Select-Object UserPrincipalName
+
+#Export to CSV
+$unenforcedUsers | Export-Csv -Path "C:\FT\SoundPharma-UsersWithoutMFAEnforcement.csv" -NoTypeInformation
 #################################################################################
 
 #################################################################################
@@ -132,15 +229,6 @@ foreach ($user in $AllUsers) {
     }
 }
 #################################################################################
-
-
-#################################################################################
-#Check if MFA is enforced globally
-Get-MgAuthenticationMethodsPolicy
-
-#Check MFA status for a user
-$userUPN= "fttest1@stpaulmn.onmicrosoft.com"
-Get-MgUserAuthenticationMethod -UserId $userUPN
 
 #################################################################################
 #Set the same password for an array of users
@@ -269,39 +357,6 @@ foreach ($user in $userList) {
     }
 }
 
-#################################################################################
-
-#################################################################################
-##Get any users not in an MFA enforced group if using Conditional Access
-#Get All Conditional Access Policies
-Connect-MgGraph -Scopes "Policy.Read.All", "Group.Read.All"
-
-$policies = Get-MgIdentityConditionalAccessPolicy | Where-Object {
-    $_.Conditions -and $_.GrantControls.BuiltInControls -contains "mfa"
-}
-
-#Extract the groups from the policies
-$groupIds = $policies.Conditions.Users.IncludeGroups
-
-#Get the members of the groups
-$enforcedUsers = foreach ($groupId in $groupIds) {
-    Get-MgGroupMember -GroupId $groupId -All | Where-Object {
-        $_.AdditionalProperties.'@odata.type' -eq '#microsoft.graph.user'
-    } | Select-Object -ExpandProperty Id
-}
-
-#Get all users in the tenant
-$allUsers = Get-MgUser -All | Select-Object Id, UserPrincipalName
-
-#Compare the lists to find users not in any enforced group
-$unenforcedUsers = $allUsers | Where-Object {
-    $enforcedUsers -notcontains $_.Id
-}
-
-$unenforcedUsers | Select-Object UserPrincipalName
-
-#Export to CSV
-$unenforcedUsers | Export-Csv -Path "C:\FT\SPC-UsersWithoutMFAEnforcement.csv" -NoTypeInformation
 #################################################################################
 
 #################################################################################
