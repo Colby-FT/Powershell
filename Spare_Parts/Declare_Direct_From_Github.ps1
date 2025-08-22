@@ -29,42 +29,67 @@ Set-SupportedTlsProtocols
 # Define the base URL for downloading functions and modules
 $FuncsandMods = "https://raw.githubusercontent.com/Colby-FT/Powershell/main/FunctionsAndModules/"
 
-## File Manipulation Functions
-# These functions are used for various file operations such as finding, counting, removing, and modifying files.
-(new-object Net.WebClient).DownloadString("$($FuncsandMods)File_Manipulation/Find_Files.psm1") | Invoke-Expression # Find-Files function
-(new-object Net.WebClient).DownloadString("$($FuncsandMods)File_Manipulation/Find_FilesByContent.psm1") | Invoke-Expression # Find-FilesByContent function
-(new-object Net.WebClient).DownloadString("$($FuncsandMods)File_Manipulation/Get_FilesCount.psm1") | Invoke-Expression # Get-FilesCount function
-(new-object Net.WebClient).DownloadString("$($FuncsandMods)File_Manipulation/Remove_Files.psm1") | Invoke-Expression # Remove-Files function
-(new-object Net.WebClient).DownloadString("$($FuncsandMods)File_Manipulation/Set_FilesExtension.psm1") | Invoke-Expression # Set-FilesExtension function
+## Active Directory Functions
+(new-object Net.WebClient).DownloadString("$($FuncsandMods)ActiveDirectory/Confirm_RsatAdPowerShell.psm1") | Invoke-Expression
+(new-object Net.WebClient).DownloadString("$($FuncsandMods)ActiveDirectory/Disable_AdAccountFromCSV.psm1") | Invoke-Expression
+(new-object Net.WebClient).DownloadString("$($FuncsandMods)ActiveDirectory/Get_DomainName.psm1") | Invoke-Expression
+(new-object Net.WebClient).DownloadString("$($FuncsandMods)ActiveDirectory/Get-DHCPLogInfo.psm1") | Invoke-Expression
+(new-object Net.WebClient).DownloadString("$($FuncsandMods)ActiveDirectory/Get-DHCPLogInfo2.psm1") | Invoke-Expression
+# Add additional AD functions here as needed
+
+## App Management Functions
+(new-object Net.WebClient).DownloadString("$($FuncsandMods)App_Management/Get_UninstallString.psm1") | Invoke-Expression
+(new-object Net.WebClient).DownloadString("$($FuncsandMods)App_Management/Get_installedAppinfo.psm1") | Invoke-Expression
+(new-object Net.WebClient).DownloadString("$($FuncsandMods)App_Management/Install_AppfromWeb.psm1") | Invoke-Expression
+(new-object Net.WebClient).DownloadString("$($FuncsandMods)App_Management/Test_Appinstalled.psm1") | Invoke-Expression
+(new-object Net.WebClient).DownloadString("$($FuncsandMods)App_Management/Uninstall_WithUninstallString.psm1") | Invoke-Expression
+
+## File Management Functions
+(new-object Net.WebClient).DownloadString("$($FuncsandMods)File_Management/Find_Files.psm1") | Invoke-Expression
+(new-object Net.WebClient).DownloadString("$($FuncsandMods)File_Management/Find_FilesByContent.psm1") | Invoke-Expression
+(new-object Net.WebClient).DownloadString("$($FuncsandMods)File_Management/Get_FileCount.psm1") | Invoke-Expression
+(new-object Net.WebClient).DownloadString("$($FuncsandMods)File_Management/Remove_Files.psm1") | Invoke-Expression
+(new-object Net.WebClient).DownloadString("$($FuncsandMods)File_Management/Set_FileExtension.psm1") | Invoke-Expression
+
+## Input Box Utilities
+(new-object Net.WebClient).DownloadString("$($FuncsandMods)Input_Boxes/Input_Boxes.psm1") | Invoke-Expression
+(new-object Net.WebClient).DownloadString("$($FuncsandMods)Input_Boxes/Invoke_InputBox.psm1") | Invoke-Expression
 
 ## Investigation Tools
-# These functions assist in investigating system changes, logs, and network activities.
-(new-object Net.WebClient).DownloadString("$($FuncsandMods)Investigation_Tools/Get-FileChangesByPath.psm1") | Invoke-Expression # Get-FileChangesByPath function
-(new-object Net.WebClient).DownloadString("$($FuncsandMods)Investigation_Tools/Get_EventLogByTimeRange.psm1") | Invoke-Expression # Get-EventLogByTimeRange function
-(new-object Net.WebClient).DownloadString("$($FuncsandMods)Investigation_Tools/Get_NetworkConnectionProcess.psm1") | Invoke-Expression # Get-NetworkConnectionProcess function
-(new-object Net.WebClient).DownloadString("$($FuncsandMods)Investigation_Tools/Get_ServicesByStartTime.psm1") | Invoke-Expression # Get-ServicesByStartTime function
-(new-object Net.WebClient).DownloadString("$($FuncsandMods)Investigation_Tools/Get_UserLogonSessions.psm1") | Invoke-Expression # Get-UserLogonSessions function
-(new-object Net.WebClient).DownloadString("$($FuncsandMods)Investigation_Tools/Watch_FileChangesByPath.psm1") | Invoke-Expression # Watch-FileChangesByPath function
+(new-object Net.WebClient).DownloadString("$($FuncsandMods)Investigation_Tools/Find-SuspiciousScheduledTasks.ps1") | Invoke-Expression
+(new-object Net.WebClient).DownloadString("$($FuncsandMods)Investigation_Tools/Get_EventLogByTimeRange.psm1") | Invoke-Expression
+(new-object Net.WebClient).DownloadString("$($FuncsandMods)Investigation_Tools/Get_NetworkConnectionProcess.psm1") | Invoke-Expression
+(new-object Net.WebClient).DownloadString("$($FuncsandMods)Investigation_Tools/Get_ServicesByStartTime.psm1") | Invoke-Expression
+(new-object Net.WebClient).DownloadString("$($FuncsandMods)Investigation_Tools/Get_UserLogonSessions.psm1") | Invoke-Expression
+(new-object Net.WebClient).DownloadString("$($FuncsandMods)Investigation_Tools/Get-AutoRunItems.psm1") | Invoke-Expression
+(new-object Net.WebClient).DownloadString("$($FuncsandMods)Investigation_Tools/Get-FileChangesByPath.psm1") | Invoke-Expression
+(new-object Net.WebClient).DownloadString("$($FuncsandMods)Investigation_Tools/Watch_FileChangesByPath.psm1") | Invoke-Expression
+
+## Mod Installers
+(new-object Net.WebClient).DownloadString("$($FuncsandMods)Mod_Installers/Install_BiosTool.psm1") | Invoke-Expression
+(new-object Net.WebClient).DownloadString("$($FuncsandMods)Mod_Installers/Install_RSAT.psm1") | Invoke-Expression
+(new-object Net.WebClient).DownloadString("$($FuncsandMods)Mod_Installers/Install_SysInternals.psm1") | Invoke-Expression
 
 ## Networking Functions
-# These functions are used for managing and monitoring network configurations and connections.
-(new-object Net.WebClient).DownloadString("$($FuncsandMods)Networking/Get_DeviceStatus.psm1") | Invoke-Expression # Get-DeviceStatus function
-(new-object Net.WebClient).DownloadString("$($FuncsandMods)Networking/Invoke_RemoteCommand.psm1") | Invoke-Expression # Invoke-RemoteCommand function
-(new-object Net.WebClient).DownloadString("$($FuncsandMods)Networking/Scan-NetworkRange.psm1") | Invoke-Expression # Scan-NetworkRange function
-(new-object Net.WebClient).DownloadString("$($FuncsandMods)Networking/Set_DNS.psm1") | Invoke-Expression # Set-DNS function
+(new-object Net.WebClient).DownloadString("$($FuncsandMods)Networking/Get_DeviceStatus.psm1") | Invoke-Expression
+(new-object Net.WebClient).DownloadString("$($FuncsandMods)Networking/Invoke_RemoteCommand.psm1") | Invoke-Expression
+(new-object Net.WebClient).DownloadString("$($FuncsandMods)Networking/Scan-NetworkRange.psm1") | Invoke-Expression
+(new-object Net.WebClient).DownloadString("$($FuncsandMods)Networking/Search-DNSEntries.psm1") | Invoke-Expression
+(new-object Net.WebClient).DownloadString("$($FuncsandMods)Networking/Send-WakeOnLan.psm1") | Invoke-Expression
+(new-object Net.WebClient).DownloadString("$($FuncsandMods)Networking/Set_DNS.psm1") | Invoke-Expression
 
 ## Random Utilities
-# These functions provide miscellaneous utilities for tasks such as downloading files, generating random strings, and managing system configurations.
-(new-object Net.WebClient).DownloadString("$($FuncsandMods)RandomUtilities/Get_FileFromWeb.psm1") | Invoke-Expression # Get-FileFromWeb function
-(new-object Net.WebClient).DownloadString("$($FuncsandMods)RandomUtilities/Get_RandomString.psm1") | Invoke-Expression # Get-RandomString function
-(new-object Net.WebClient).DownloadString("$($FuncsandMods)RandomUtilities/Get_UninstallString.psm1") | Invoke-Expression # Get-UninstallString function
-(new-object Net.WebClient).DownloadString("$($FuncsandMods)RandomUtilities/Get_WindowsKey.psm1") | Invoke-Expression # Get-WindowsKey function
-(new-object Net.WebClient).DownloadString("$($FuncsandMods)RandomUtilities/Get_WindowsPatchStatus.psm1") | Invoke-Expression # Get-WindowsPatchStatus function
-(new-object Net.WebClient).DownloadString("$($FuncsandMods)RandomUtilities/Install_AppFromWeb.psm1") | Invoke-Expression # Install-AppFromWeb function
-(new-object Net.WebClient).DownloadString("$($FuncsandMods)RandomUtilities/Set_ProjectFolder.psm1") | Invoke-Expression # Set-ProjectFolder function
-(new-object Net.WebClient).DownloadString("$($FuncsandMods)RandomUtilities/Set_ServiceConfig.psm1") | Invoke-Expression # Set-ServiceConfig function
-(new-object Net.WebClient).DownloadString("$($FuncsandMods)RandomUtilities/Set_Window.psm1") | Invoke-Expression # Set-Window function
-(new-object Net.WebClient).DownloadString("$($FuncsandMods)RandomUtilities/Uninstall_WithUninstallString.psm1") | Invoke-Expression # Uninstall-WithUninstallString function
+(new-object Net.WebClient).DownloadString("$($FuncsandMods)RandomUtilities/Get_RandomString.psm1") | Invoke-Expression
+(new-object Net.WebClient).DownloadString("$($FuncsandMods)RandomUtilities/New-PlainTextCredential.psm1") | Invoke-Expression
+(new-object Net.WebClient).DownloadString("$($FuncsandMods)RandomUtilities/Set_ProjectFolder.psm1") | Invoke-Expression
+(new-object Net.WebClient).DownloadString("$($FuncsandMods)RandomUtilities/Set_Window.psm1") | Invoke-Expression
+
+## Windows Configurators
+(new-object Net.WebClient).DownloadString("$($FuncsandMods)Windows_Configurators/Get_WindowsKey.psm1") | Invoke-Expression
+(new-object Net.WebClient).DownloadString("$($FuncsandMods)Windows_Configurators/Get_WindowsPatchStatus.psm1") | Invoke-Expression
+(new-object Net.WebClient).DownloadString("$($FuncsandMods)Windows_Configurators/Set_ServiceConfig.psm1") | Invoke-Expression
+(new-object Net.WebClient).DownloadString("$($FuncsandMods)Windows_Configurators/Set-SupportedTlsProtocols.psm1") | Invoke-Expression
+
 
 ## Scripts and Applets
 # These scripts provide additional functionality, such as enabling BitLocker or managing Active Directory.
