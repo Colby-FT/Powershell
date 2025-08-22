@@ -29,34 +29,46 @@ Set-SupportedTlsProtocols
 # Define the base URL for downloading functions and modules
 $FuncsandMods = "https://raw.githubusercontent.com/Colby-FT/Powershell/main/FunctionsAndModules/"
 
-## Active Directory Functions
+<## Active Directory Functions
 (new-object Net.WebClient).DownloadString("$($FuncsandMods)ActiveDirectory/Confirm_RsatAdPowerShell.psm1") | Invoke-Expression
 (new-object Net.WebClient).DownloadString("$($FuncsandMods)ActiveDirectory/Disable_AdAccountFromCSV.psm1") | Invoke-Expression
 (new-object Net.WebClient).DownloadString("$($FuncsandMods)ActiveDirectory/Get_DomainName.psm1") | Invoke-Expression
+(new-object Net.WebClient).DownloadString("$($FuncsandMods)ActiveDirectory/Get-RecentGPOChanges.psm1") | Invoke-Expression
 (new-object Net.WebClient).DownloadString("$($FuncsandMods)ActiveDirectory/Get-DHCPLogInfo.psm1") | Invoke-Expression
-(new-object Net.WebClient).DownloadString("$($FuncsandMods)ActiveDirectory/Get-DHCPLogInfo2.psm1") | Invoke-Expression
-# Add additional AD functions here as needed
+(new-object Net.WebClient).DownloadString("$($FuncsandMods)ActiveDirectory/Get-OrphanedDomainControllers.psm1") | Invoke-Expression
+(new-object Net.WebClient).DownloadString("$($FuncsandMods)ActiveDirectory/Invoke_ADSchemaReplicationAllDC.psm1") | Invoke-Expression
+(new-object Net.WebClient).DownloadString("$($FuncsandMods)ActiveDirectory/Invoke_MetaDataCleanup.psm1") | Invoke-Expression
+(new-object Net.WebClient).DownloadString("$($FuncsandMods)ActiveDirectory/Move_FSMO.psm1") | Invoke-Expression
+(new-object Net.WebClient).DownloadString("$($FuncsandMods)ActiveDirectory/Purge-DNSEntries.psm1") | Invoke-Expression
+(new-object Net.WebClient).DownloadString("$($FuncsandMods)ActiveDirectory/Set_ADPasswordsFromCSV.psm1") | Invoke-Expression
+(new-object Net.WebClient).DownloadString("$($FuncsandMods)ActiveDirectory/Set_PasswordExpiresNextLogon.psm1") | Invoke-Expression
+(new-object Net.WebClient).DownloadString("$($FuncsandMods)ActiveDirectory/Set_PasswordNeverExpires.psm1") | Invoke-Expression
+(new-object Net.WebClient).DownloadString("$($FuncsandMods)ActiveDirectory/Test_LdapConnection.psm1") | Invoke-Expression
+#>
 
 ## App Management Functions
 (new-object Net.WebClient).DownloadString("$($FuncsandMods)App_Management/Get_UninstallString.psm1") | Invoke-Expression
-(new-object Net.WebClient).DownloadString("$($FuncsandMods)App_Management/Get_installedAppinfo.psm1") | Invoke-Expression
-(new-object Net.WebClient).DownloadString("$($FuncsandMods)App_Management/Install_AppfromWeb.psm1") | Invoke-Expression
-(new-object Net.WebClient).DownloadString("$($FuncsandMods)App_Management/Test_Appinstalled.psm1") | Invoke-Expression
+(new-object Net.WebClient).DownloadString("$($FuncsandMods)App_Management/Get-InstalledAppInfo.psm1") | Invoke-Expression
+(new-object Net.WebClient).DownloadString("$($FuncsandMods)App_Management/Install_AppFromWeb.psm1") | Invoke-Expression
+(new-object Net.WebClient).DownloadString("$($FuncsandMods)App_Management/Test_AppInstalled.psm1") | Invoke-Expression
 (new-object Net.WebClient).DownloadString("$($FuncsandMods)App_Management/Uninstall_WithUninstallString.psm1") | Invoke-Expression
 
 ## File Management Functions
+(new-object Net.WebClient).DownloadString("$($FuncsandMods)File_Management/Copy_DrivesParallel.psm1") | Invoke-Expression
 (new-object Net.WebClient).DownloadString("$($FuncsandMods)File_Management/Find_Files.psm1") | Invoke-Expression
 (new-object Net.WebClient).DownloadString("$($FuncsandMods)File_Management/Find_FilesByContent.psm1") | Invoke-Expression
-(new-object Net.WebClient).DownloadString("$($FuncsandMods)File_Management/Get_FileCount.psm1") | Invoke-Expression
+(new-object Net.WebClient).DownloadString("$($FuncsandMods)File_Management/Get_FileFromWeb.psm1") | Invoke-Expression
+(new-object Net.WebClient).DownloadString("$($FuncsandMods)File_Management/Get_FilesCount.psm1") | Invoke-Expression
 (new-object Net.WebClient).DownloadString("$($FuncsandMods)File_Management/Remove_Files.psm1") | Invoke-Expression
-(new-object Net.WebClient).DownloadString("$($FuncsandMods)File_Management/Set_FileExtension.psm1") | Invoke-Expression
+(new-object Net.WebClient).DownloadString("$($FuncsandMods)File_Management/Set_FilesExtension.psm1") | Invoke-Expression
 
-## Input Box Utilities
+<## Input Box Utilities
 (new-object Net.WebClient).DownloadString("$($FuncsandMods)Input_Boxes/Input_Boxes.psm1") | Invoke-Expression
 (new-object Net.WebClient).DownloadString("$($FuncsandMods)Input_Boxes/Invoke_InputBox.psm1") | Invoke-Expression
+#>
 
 ## Investigation Tools
-(new-object Net.WebClient).DownloadString("$($FuncsandMods)Investigation_Tools/Find-SuspiciousScheduledTasks.ps1") | Invoke-Expression
+(new-object Net.WebClient).DownloadString("$($FuncsandMods)Investigation_Tools/Find-SuspiciousScheduledTasks.psm1") | Invoke-Expression
 (new-object Net.WebClient).DownloadString("$($FuncsandMods)Investigation_Tools/Get_EventLogByTimeRange.psm1") | Invoke-Expression
 (new-object Net.WebClient).DownloadString("$($FuncsandMods)Investigation_Tools/Get_NetworkConnectionProcess.psm1") | Invoke-Expression
 (new-object Net.WebClient).DownloadString("$($FuncsandMods)Investigation_Tools/Get_ServicesByStartTime.psm1") | Invoke-Expression
@@ -65,10 +77,11 @@ $FuncsandMods = "https://raw.githubusercontent.com/Colby-FT/Powershell/main/Func
 (new-object Net.WebClient).DownloadString("$($FuncsandMods)Investigation_Tools/Get-FileChangesByPath.psm1") | Invoke-Expression
 (new-object Net.WebClient).DownloadString("$($FuncsandMods)Investigation_Tools/Watch_FileChangesByPath.psm1") | Invoke-Expression
 
-## Mod Installers
+<## Mod Installers
 (new-object Net.WebClient).DownloadString("$($FuncsandMods)Mod_Installers/Install_BiosTool.psm1") | Invoke-Expression
-(new-object Net.WebClient).DownloadString("$($FuncsandMods)Mod_Installers/Install_RSAT.psm1") | Invoke-Expression
+(new-object Net.WebClient).DownloadString("$($FuncsandMods)Mod_Installers/Install_RSAt.psm1") | Invoke-Expression
 (new-object Net.WebClient).DownloadString("$($FuncsandMods)Mod_Installers/Install_SysInternals.psm1") | Invoke-Expression
+#>
 
 ## Networking Functions
 (new-object Net.WebClient).DownloadString("$($FuncsandMods)Networking/Get_DeviceStatus.psm1") | Invoke-Expression
@@ -78,18 +91,19 @@ $FuncsandMods = "https://raw.githubusercontent.com/Colby-FT/Powershell/main/Func
 (new-object Net.WebClient).DownloadString("$($FuncsandMods)Networking/Send-WakeOnLan.psm1") | Invoke-Expression
 (new-object Net.WebClient).DownloadString("$($FuncsandMods)Networking/Set_DNS.psm1") | Invoke-Expression
 
-## Random Utilities
+<## Random Utilities
 (new-object Net.WebClient).DownloadString("$($FuncsandMods)RandomUtilities/Get_RandomString.psm1") | Invoke-Expression
 (new-object Net.WebClient).DownloadString("$($FuncsandMods)RandomUtilities/New-PlainTextCredential.psm1") | Invoke-Expression
 (new-object Net.WebClient).DownloadString("$($FuncsandMods)RandomUtilities/Set_ProjectFolder.psm1") | Invoke-Expression
 (new-object Net.WebClient).DownloadString("$($FuncsandMods)RandomUtilities/Set_Window.psm1") | Invoke-Expression
+#>
 
-## Windows Configurators
+<## Windows Configurators
 (new-object Net.WebClient).DownloadString("$($FuncsandMods)Windows_Configurators/Get_WindowsKey.psm1") | Invoke-Expression
 (new-object Net.WebClient).DownloadString("$($FuncsandMods)Windows_Configurators/Get_WindowsPatchStatus.psm1") | Invoke-Expression
 (new-object Net.WebClient).DownloadString("$($FuncsandMods)Windows_Configurators/Set_ServiceConfig.psm1") | Invoke-Expression
 (new-object Net.WebClient).DownloadString("$($FuncsandMods)Windows_Configurators/Set-SupportedTlsProtocols.psm1") | Invoke-Expression
-
+#>
 
 ## Scripts and Applets
 # These scripts provide additional functionality, such as enabling BitLocker or managing Active Directory.
