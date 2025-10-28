@@ -1,0 +1,64 @@
+#Connect to Exchange
+Connect-ExchangeOnline
+
+#Check if external tagging is enabled
+Get-ExternalInOutlook
+
+#Check if emails are being pre-screened for potentially maicious attachmnents and links
+Get-MalwareFilterPolicy
+Get-AntiPhishPolicy
+Get-SafeLinksPolicy #May not work if Defender for Office is not licensed
+Get-SafeAttachmentPolicy #May not work if Defender for Office is not licensed
+
+#Check if DKIM, SPF, and DMARC are enabled
+#Check Dkim first because it will list all the domains
+Get-DkimSigningConfig
+#Something like {v=spf1 include:spf.protection.outlook.com -all} indicates this is enabled
+Resolve-DnsName -Name "glendaleheating.com" -Type TXT;
+#DNS Name does not exist error indicates that DMARC is not set up
+Resolve-DnsName -Name "_dmarc.glendaleheating.com" -Type TXT;
+
+#Check if MFA is enabled for all users
+#Use the MS Graph PowerShell SDK - Details in M365_Entra.txt
+
+#Pull an orca report - Conatins details on many of the common security settings for M365
+Install-Module ORCA -Force
+Get-ORCAReport
+
+
+<#
+Patch Policy Summary
+    Critical patches are installed as soon as available. Non-critical patches are installed after they have been available for 14 days to ensure stability in the systems.
+
+
+#>
+
+<#
+Tasks
+    Find the canned responses
+    Create new canned responses
+    Get everything into ITG
+    Read up on Powershell best practices
+    Look deeper into who made ORCA, and what it does
+
+
+Notes
+    Outside Senders notification can be set in two different places
+    For DKIM and stuff we don't care about the onmicrosoft.com domain, we care about the custom domain
+    If something checks two items, and one is false, the whole thing is false
+    Advanced Threat Protection is now called Defender for exchange
+    Don't fill out the DDQ.  Provide evidence, and let them fill it out
+        This allows them to interpret the evidence in their own way, and make the decisions
+    For remote access MFA, make sure to check all possible ways to set up mfa for the remote access
+        Specifically, the VPNs may have multiple ways to set up MFA
+    If unsure about something, round down or ping Joel
+    We user Cyber QP for privileged account management
+    If we have a deployment checklist, we can say that we do basic hardening at deployment
+    Do an audit for non-IT users with admin rights via RMM before
+    We deploy WebTitan to all clients. So almost all clients will be yes for Protective DNS
+    We do not have endpoint application isolation and containment
+        EDR, RMM, and RC isolation do not count
+    Need to check if datto backups are encrypted
+        We enforce this for all new clients, but some clients brought over from other MSPs may not have it
+    
+    #>

@@ -1,587 +1,735 @@
 #################################################################################
-#Install the MS Graph PowerShell SDK
-if (-not (Get-Module -ListAvailable -Name Microsoft.Graph)) {
-    Write-Host "Installing Microsoft.Graph module..."
-    Install-Module Microsoft.Graph -Scope CurrentUser
-}
-if (-not (Get-Module -ListAvailable -Name Microsoft.Graph.Identity.SignIns)) {
-    Install-Module Microsoft.Graph.Identity.SignIns -Scope CurrentUser
-    Write-Host "Microsoft.Graph.Identity.SignIns module installed successfully."
-}
-if (-not (Get-Module -ListAvailable -Name Microsoft.Graph.Groups)) {
-    Install-Module Microsoft.Graph.Groups -Scope CurrentUser
-    Write-Host "Microsoft.Graph.Groups module installed successfully."
-}
-if (-not (Get-Module -ListAvailable -Name Microsoft.Graph.Users.Actions)) {
-    Install-Module Microsoft.Graph.Users.Actions -Scope CurrentUser
-    Write-Host "Microsoft.Graph.Users.Actions module installed successfully."
-}  else {
-    Write-Host "MS Graph modules already installed."
-}
-Import-Module Microsoft.Graph.Identity.SignIns
-Import-Module Microsoft.Graph.Groups
-Import-Module Microsoft.Graph.Users.Actions
-#################################################################################
-#################################################################################
-#Remember to use the disconnect command when finished, or it will auto-connect back to that same tenant next time you run a command.
-Disconnect-MgGraph
-###################################################################################
+#Helper function to Install the MS Graph PowerShell SDK modules needed for the other functions.
 
-#################################################################################
-#Connect to Microsoft Graph with read/Write
-Connect-MgGraph -Scopes "User.ReadWrite.All", "Directory.ReadWrite.All", "UserAuthenticationMethod.ReadWrite.All", "Policy.Read.All", "Group.ReadWrite.All"
+function Install-MgGraphModules {
+    <#
+    .SYNOPSIS
+    Installs required Microsoft Graph PowerShell SDK modules if not already installed.
 
-#Connect to Microsoft Graph with read
-Connect-MgGraph -Scopes "User.Read.All", "Directory.Read.All", "UserAuthenticationMethod.Read.All", "Policy.Read.All", "Group.Read.All"
-#################################################################################
+    .DESCRIPTION
+    Checks for and installs Microsoft.Graph, Microsoft.Graph.Identity.SignIns, Microsoft.Graph.Groups, and Microsoft.Graph.Users.Actions modules.
 
-#################################################################################
-#Check if security defaults are enabled
-Connect-MgGraph -Scopes "Policy.Read.All"
-Get-MgPolicyIdentitySecurityDefaultEnforcementPolicy | Select-Object -Property DisplayName, Id, IsEnabled
+    .EXAMPLE
+    Install-MgGraphModules
+    Installs all required modules if missing.
+    #>
+    [CmdletBinding()]
+    param ()
 
-#List allowed authentication methods
-Connect-MgGraph -Scopes "Policy.Read.All"
-Get-MgPolicyAuthenticationMethodPolicy | Select-Object -Property DisplayName, PolicyVersion, AuthenticationMethodConfigurations
+    Begin {}
 
-#Check if there are any Conditional Access Policies
-$policies = Get-MgIdentityConditionalAccessPolicy
-if ($policies.Count -gt 0) {
-    Write-host -ForegroundColor DarkGreen "$policies.Count Conditional Access policies found."
-} else {
-    Write-Host -ForegroundColor DarkYellow "No Conditional Access policies found."
-}
-
-#Check MFA status for a user
-$userUPN= "fttest1@stpaulmn.onmicrosoft.com"
-Get-MgUserAuthenticationMethod -UserId $userUPN
-#################################################################################
-#################################################################################
-#Check MFA status for all users
-Connect-MgGraph -Scopes "User.Read.All", "UserAuthenticationMethod.Read.All"
-$results = @()
-$allUsers = Get-MgUser -All
-
-foreach ($userObj in $allUsers) {
-    $userUPN = $userObj.UserPrincipalName
-    $userName = $userObj.DisplayName
-    $authMethods = Get-MgUserAuthenticationMethod -UserId $userUPN
-
-    $mfaMethods = @()
-    if ($authMethods) {
-        $nonPasswordMethods = $authMethods | Where-Object {
-            $_.AdditionalProperties["@odata.type"] -ne "#microsoft.graph.passwordAuthenticationMethod"
+    Process {
+        if (-not (Get-Module -ListAvailable -Name Microsoft.Graph)) {
+            Write-Host "Installing Microsoft.Graph module..."
+            Install-Module Microsoft.Graph -Scope CurrentUser -Force
         }
+        if (-not (Get-Module -ListAvailable -Name Microsoft.Graph.Identity.SignIns)) {
+            Install-Module Microsoft.Graph.Identity.SignIns -Scope CurrentUser -Force
+            Write-Host "Microsoft.Graph.Identity.SignIns module installed successfully."
+        }
+        if (-not (Get-Module -ListAvailable -Name Microsoft.Graph.Groups)) {
+            Install-Module Microsoft.Graph.Groups -Scope CurrentUser -Force
+            Write-Host "Microsoft.Graph.Groups module installed successfully."
+        }
+        if (-not (Get-Module -ListAvailable -Name Microsoft.Graph.Users.Actions)) {
+            Install-Module Microsoft.Graph.Users.Actions -Scope CurrentUser -Force
+            Write-Host "Microsoft.Graph.Users.Actions module installed successfully."
+        }  else {
+            Write-Host "MS Graph modules already installed."
+        }
+        Import-Module Microsoft.Graph.Identity.SignIns
+        Import-Module Microsoft.Graph.Groups
+        Import-Module Microsoft.Graph.Users.Actions
+    }
 
-        if ($nonPasswordMethods.Count -gt 0) {
-            foreach ($method in $nonPasswordMethods) {
+    End {}
+}
+
+#################################################################################
+#Function to check some common security settings in Entra ID. With options to Check if security defaults are enabled, List allowed authentication methods, Check if there are any Conditional Access Policies
+
+function Get-EntraSecuritySettings {
+    <#
+    .SYNOPSIS
+    Checks common security settings in Entra ID.
+
+    .DESCRIPTION
+    Checks if security defaults are enabled, lists allowed authentication methods, and checks for Conditional Access Policies.
+
+    .EXAMPLE
+    Get-EntraSecuritySettings
+    #>
+    [CmdletBinding()]
+    param ()
+
+    Begin {
+        Install-MgGraphModules
+        Connect-MgGraph -Scopes "Policy.Read.All" -NoWelcome
+    }
+
+    Process {
+        Write-Host "Security Defaults Policy:"
+        Get-MgPolicyIdentitySecurityDefaultEnforcementPolicy | Select-Object -Property DisplayName, Id, IsEnabled
+
+        Write-Host "Allowed Authentication Methods:"
+        Get-MgPolicyAuthenticationMethodPolicy | Select-Object -Property DisplayName, PolicyVersion, AuthenticationMethodConfigurations
+
+        Write-Host "Conditional Access Policies:"
+        $policies = Get-MgIdentityConditionalAccessPolicy
+        if ($policies.Count -gt 0) {
+            Write-host -ForegroundColor DarkGreen "$($policies.Count) Conditional Access policies found."
+        } else {
+            Write-Host -ForegroundColor DarkYellow "No Conditional Access policies found."
+        }
+    }
+
+    End {}
+}
+
+#################################################################################
+#Function to check MFA status for users.  With options to Check MFA status for a user, Check MFA status for all users, Get any users not in an MFA enforced group if using Conditional Access Policies
+
+function Get-EntraMFAStatus {
+    <#
+    .SYNOPSIS
+    Checks MFA status and account activity for users.
+
+    .DESCRIPTION
+    Checks MFA status for a single user, all users, and finds users not in an MFA enforced group.
+
+    .PARAMETER UserUPN
+    User principal name to check (optional).
+
+    .PARAMETER ExportPath
+    Path to export MFA status CSV (optional).
+
+    .EXAMPLE
+    Get-EntraMFAStatus -UserUPN user@domain.com
+    Checks MFA status for a single user.
+
+    .EXAMPLE
+    Get-EntraMFAStatus -ExportPath "C:\report.csv"
+    Exports MFA status for all users.
+    #>
+    [CmdletBinding()]
+    param (
+        [string]$UserUPN,
+        [string]$ExportPath
+    )
+
+    Begin {
+        Install-MgGraphModules
+        Connect-MgGraph -Scopes "User.Read.All", "UserAuthenticationMethod.Read.All" -NoWelcome
+    }
+
+    Process {
+        if ($UserUPN) {
+            $user = Get-MgUser -UserId $UserUPN -Property "AccountEnabled,DisplayName,UserPrincipalName"
+            $authMethods = Get-MgUserAuthenticationMethod -UserId $UserUPN
+
+            $mfaMethods = @()
+            if ($authMethods) {
+                $nonPasswordMethods = $authMethods | Where-Object {
+                    $_.AdditionalProperties["@odata.type"] -ne "#microsoft.graph.passwordAuthenticationMethod"
+                }
+
+                if ($nonPasswordMethods.Count -gt 0) {
+                    foreach ($method in $nonPasswordMethods) {
+                        $type = $method.AdditionalProperties["@odata.type"]
+                        $mfaMethods += $type
+                    }
+                }
+            }
+
+            $status = if ($mfaMethods.Count -gt 0) { "MFA Enabled" } else { "No MFA" }
+            $methodsString = if ($mfaMethods.Count -gt 0) { $mfaMethods -join ", " } else { "None" }
+            $accountStatus = if ($null -ne $user.AccountEnabled -and $user.AccountEnabled -eq $true) { "Active" } else { "Disabled" }
+
+            $results = [PSCustomObject]@{
+                DisplayName = $user.DisplayName
+                UserPrincipalName = $user.UserPrincipalName
+                AccountStatus = $accountStatus
+                MFAStatus = $status
+                MFAMethods = $methodsString
+            }
+        } else {
+            $results = @()
+            $allUsers = Get-MgUser -All -Property "AccountEnabled,DisplayName,UserPrincipalName"
+
+            foreach ($userObj in $allUsers) {
+                $userUPN = $userObj.UserPrincipalName
+                $userName = $userObj.DisplayName
+                $accountStatus = if ($null -ne $userObj.AccountEnabled -and $userObj.AccountEnabled -eq $true) { "Active" } else { "Disabled" }
+
+                $authMethods = Get-MgUserAuthenticationMethod -UserId $userUPN
+
+                $mfaMethods = @()
+                if ($authMethods) {
+                    $nonPasswordMethods = $authMethods | Where-Object {
+                        $_.AdditionalProperties["@odata.type"] -ne "#microsoft.graph.passwordAuthenticationMethod"
+                    }
+
+                    if ($nonPasswordMethods.Count -gt 0) {
+                        foreach ($method in $nonPasswordMethods) {
+                            $type = $method.AdditionalProperties["@odata.type"]
+                            $mfaMethods += $type
+                        }
+                    }
+                }
+
+                $status = if ($mfaMethods.Count -gt 0) { "MFA Enabled" } else { "No MFA" }
+                $methodsString = if ($mfaMethods.Count -gt 0) { $mfaMethods -join ", " } else { "None" }
+
+                $results += [PSCustomObject]@{
+                    DisplayName = $userName
+                    UserPrincipalName = $userUPN
+                    AccountStatus = $accountStatus
+                    MFAStatus = $status
+                    MFAMethods = $methodsString
+                }
+            }
+        }
+    }
+
+    End {
+        if ($ExportPath) {
+            $results | Export-Csv -Path $ExportPath -NoTypeInformation
+        } else {
+            $results | Format-Table -AutoSize
+        }
+    }
+}
+
+
+
+#################################################################################
+#Function to revoke sign-in sessions for users.  With options to Revoke Sign-In Sessions for an array of users, Revoke Sign-In Sessions for a list of users from a csv file, Revoke sign-in sessions for all users
+
+function Revoke-EntraUserSignInSession {
+    <#
+    .SYNOPSIS
+    Revokes sign-in sessions for users.
+
+    .DESCRIPTION
+    Revokes sign-in sessions for an array of users, from a CSV, or for all users.
+
+    .PARAMETER Users
+    Array of user UPNs.
+
+    .PARAMETER CsvPath
+    Path to CSV file with UPN column.
+
+    .PARAMETER AllUsers
+    Switch to revoke for all users.
+
+    .PARAMETER DryRun
+    If set, only simulates the action.
+
+    .PARAMETER LogPath
+    Path to log file.
+
+    .EXAMPLE
+    Revoke-EntraUserSignInSession -Users @("user1@contoso.com") -DryRun
+    #>
+    [CmdletBinding()]
+    param (
+        [string[]]$Users,
+        [string]$CsvPath,
+        [switch]$AllUsers,
+        [switch]$DryRun = $true,
+        [string]$LogPath = "C:\FT\SessionRevokeLog.txt"
+    )
+
+    Begin {
+        Install-MgGraphModules
+        Connect-MgGraph -Scopes "User.ReadWrite.All" 
+    }
+
+    Process {
+        $targetUsers = @()
+        if ($Users) {
+            $targetUsers = $Users
+        } elseif ($CsvPath) {
+            $targetUsers = (Import-Csv -Path $CsvPath).UPN
+        } elseif ($AllUsers) {
+            $targetUsers = (Get-MgUser -All).UserPrincipalName
+        }
+        foreach ($userUPN in $targetUsers) {
+            try {
+                $userObj = Get-MgUser -UserId $userUPN
+                $userName = $userObj.DisplayName
+                if ($DryRun) {
+                    Write-Host "[Dry Run] Would revoke all sign in sessions for user $userName with UPN $userUPN"
+                    Add-Content -Path $LogPath -Value "[Dry Run] Would revoke sign in sessions for user $userName with UPN $userUPN"
+                } else {
+                    Revoke-MgUserSignInSession -UserId $userUPN
+                    Write-Host -ForegroundColor Green "Sign in sessions revoked for user $userName with UPN $userUPN"
+                    Add-Content -Path $LogPath -Value "Sign in sessions revoked for user $userName with UPN $userUPN"
+                }
+            } catch {
+                Write-Host -ForegroundColor Red "Failed to process user $userUPN. Error $_"
+                Add-Content -Path $LogPath -Value "Failed to process user $userUPN. Error $_"
+            }
+        }
+    }
+
+    End {}
+}
+
+#################################################################################
+#Function to set users' passwords.  With options to Set the same password for an array of users, Set an array of users' passwords with corresponding array of passwords, Set users' passwords from a CSV file
+
+function Set-EntraUserPassword {
+    <#
+    .SYNOPSIS
+    Sets users' passwords.
+
+    .DESCRIPTION
+    Sets the same password for an array of users, sets passwords from arrays, or from a CSV file.
+
+    .PARAMETER Users
+    Array of user UPNs.
+
+    .PARAMETER Password
+    Password to set for all users.
+
+    .PARAMETER Passwords
+    Array of passwords corresponding to users.
+
+    .PARAMETER CsvPath
+    Path to CSV file with UPN and Password columns.
+
+    .PARAMETER DryRun
+    If set, only simulates the action.
+
+    .PARAMETER LogPath
+    Path to log file.
+
+    .EXAMPLE
+    Set-EntraUserPassword -Users @("user@domain.com") -Password "Secret123" -DryRun
+    #>
+    [CmdletBinding()]
+    param (
+        [string[]]$Users,
+        [string]$Password,
+        [string[]]$Passwords,
+        [string]$CsvPath,
+        [switch]$DryRun = $true,
+        [string]$LogPath = "C:\Path\To\Your\PasswordLog.txt"
+    )
+
+    Begin {
+        Install-MgGraphModules
+        Connect-MgGraph -Scopes "User.ReadWrite.All"
+    }
+
+    Process {
+        if ($Users -and $Password) {
+            foreach ($userUPN in $Users) {
+                $userObj = Get-MgUser -UserId $userUPN
+                $userName = $userObj.DisplayName
+                $params = @{
+                    PasswordProfile = @{
+                        Password = $Password
+                        ForceChangePasswordNextSignIn = $true
+                    }
+                }
+                if ($DryRun) {
+                    Write-Host "[Dry Run] Would set password for user $userName with UPN $userUPN"
+                    Add-Content -Path $LogPath -Value "[Dry Run] Would set password for user $userName with UPN $userUPN"
+                } else {
+                    try {
+                        Update-MgUser -UserId $userUPN -BodyParameter $params
+                        Write-Host -ForegroundColor Green "Password set successfully for user $userName with UPN $userUPN"
+                        Add-Content -Path $LogPath -Value "Password set successfully for user $userName with UPN $userUPN"
+                    } catch {
+                        Write-Host -ForegroundColor Red "Failed to set password for user $userName with UPN $userUPN. Error: $_"
+                        Add-Content -Path $LogPath -Value "Failed to set password for user $userName with UPN $userUPN. Error: $_"
+                    }
+                }
+            }
+        } elseif ($Users -and $Passwords) {
+            if ($Users.Count -ne $Passwords.Count) {
+                Write-Host "Error: The number of users and passwords must match."
+                return
+            }
+            for ($i = 0; $i -lt $Users.Count; $i++) {
+                $userUPN = $Users[$i]
+                $newPassword = $Passwords[$i]
+                $userObj = Get-MgUser -UserId $userUPN
+                $userName = $userObj.DisplayName
+                $params = @{
+                    PasswordProfile = @{
+                        Password = $newPassword
+                        ForceChangePasswordNextSignIn = $true
+                    }
+                }
+                if ($DryRun) {
+                    Write-Host "[Dry Run] Would set password for user $userName with UPN $userUPN"
+                    Add-Content -Path $LogPath -Value "[Dry Run] Would set password for user $userName with UPN $userUPN"
+                } else {
+                    try {
+                        Update-MgUser -UserId $userUPN -BodyParameter $params
+                        Write-Host -ForegroundColor Green "Password set successfully for user $userName with UPN $userUPN"
+                        Add-Content -Path $LogPath -Value "Password set successfully for user $userName with UPN $userUPN"
+                    } catch {
+                        Write-Host -ForegroundColor Red "Failed to set password for user $userName with UPN $userUPN. Error: $_"
+                        Add-Content -Path $LogPath -Value "Failed to set password for user $userName with UPN $userUPN. Error: $_"
+                    }
+                }
+            }
+        } elseif ($CsvPath) {
+            $userList = Import-Csv -Path $CsvPath
+            foreach ($user in $userList) {
+                $userUPN = $user.UPN
+                $newPassword = $user.Password
+                $userObj = Get-MgUser -UserId $userUPN
+                $userName = $userObj.DisplayName
+                $params = @{
+                    PasswordProfile = @{
+                        Password = $newPassword
+                        ForceChangePasswordNextSignIn = $true
+                    }
+                }
+                if ($DryRun) {
+                    Write-Host "[Dry Run] Would set password for user $userName with UPN $userUPN"
+                    Add-Content -Path $LogPath -Value "[Dry Run] Would set password for user $userName with UPN $userUPN"
+                } else {
+                    try {
+                        Update-MgUser -UserId $userUPN -BodyParameter $params
+                        Write-Host -ForegroundColor Green "Password set successfully for user $userName with UPN $userUPN"
+                        Add-Content -Path $LogPath -Value "Password set successfully for user $userName with UPN $userUPN"
+                    } catch {
+                        Write-Host -ForegroundColor Red "Failed to set password for user $userName with UPN $userUPN. Error: $_"
+                        Add-Content -Path $LogPath -Value "Failed to set password for user $userName with UPN $userUPN. Error: $_"
+                    }
+                }
+            }
+        }
+    }
+
+    End {}
+}
+
+#################################################################################
+##Function to remove all authentication methods.  With options to Remove all authentication methods from a CSV file of users or Remove all authentication methods for an array of users
+
+function Remove-EntraUserAuthenticationMethods {
+    <#
+    .SYNOPSIS
+    Removes all authentication methods for users.
+
+    .DESCRIPTION
+    Removes all authentication methods for an array of users or from a CSV file.
+
+    .PARAMETER Users
+    Array of user UPNs.
+
+    .PARAMETER CsvPath
+    Path to CSV file with UPN column.
+
+    .PARAMETER DryRun
+    If set, only simulates the action.
+
+    .PARAMETER LogPath
+    Path to log file.
+
+    .EXAMPLE
+    Remove-EntraUserAuthenticationMethods -Users @("user@domain.com") -DryRun
+    #>
+    [CmdletBinding()]
+    param (
+        [string[]]$Users,
+        [string]$CsvPath,
+        [switch]$DryRun = $true,
+        [string]$LogPath = "C:\Path\To\Your\Log.txt"
+    )
+
+    Begin {
+        Install-MgGraphModules
+        Connect-MgGraph -Scopes "User.ReadWrite.All", "Directory.ReadWrite.All", "UserAuthenticationMethod.ReadWrite.All", "Policy.Read.All", "Group.ReadWrite.All"
+    }
+
+    Process {
+        $targetUsers = @()
+        if ($Users) {
+            $targetUsers = $Users
+        } elseif ($CsvPath) {
+            $targetUsers = (Import-Csv -Path $CsvPath).UPN
+        }
+        foreach ($userUPN in $targetUsers) {
+            $authMethods = Get-MgUserAuthenticationMethod -UserId $userUPN
+            $userObj = Get-MgUser -UserId $userUPN
+            $userName = $userObj.DisplayName
+            foreach ($method in $authMethods) {
+                $id = $method.Id
                 $type = $method.AdditionalProperties["@odata.type"]
-                $mfaMethods += $type
+                switch ($type) {
+                    "#microsoft.graph.microsoftAuthenticatorAuthenticationMethod" {
+                        if ($DryRun) {
+                            Write-Host "[Dry Run] Would remove Microsoft Authenticator method for user $userName with UPN $userUPN"
+                            Add-Content -Path $LogPath -Value "[Dry Run] Microsoft Authenticator method for $userName with UPN $userUPN (ID: $id)"
+                        } else {
+                            Remove-MgUserAuthenticationMicrosoftAuthenticatorMethod -UserId $userUPN -MicrosoftAuthenticatorAuthenticationMethodId $id
+                            Write-Host -ForegroundColor Green "Removed Microsoft Authenticator method for user $userName with UPN $userUPN"
+                            Add-Content -Path $LogPath -Value "Removed Microsoft Authenticator method for $userName with UPN $userUPN (ID: $id)"
+                        }
+                    }
+                    "#microsoft.graph.emailAuthenticationMethod" {
+                        if ($DryRun) {
+                            Write-Host "[Dry Run] Would remove Email method for user $userName with UPN $userUPN"
+                            Add-Content -Path $LogPath -Value "[Dry Run] Email method for $userName with UPN $userUPN (ID: $id)"
+                        } else {
+                            Remove-MgUserAuthenticationEmailMethod -UserId $userUPN -EmailAuthenticationMethodId $id
+                            Write-Host -ForegroundColor Green "Removed Email method for user $userName with UPN $userUPN"
+                            Add-Content -Path $LogPath -Value "Removed Email method for $userName with UPN $userUPN (ID: $id)"
+                        }
+                    }
+                    "#microsoft.graph.fido2AuthenticationMethod" {
+                        if ($DryRun) {
+                            Write-Host "[Dry Run] Would remove FIDO2 method for user $userName with UPN $userUPN"
+                            Add-Content -Path $LogPath -Value "[Dry Run] FIDO2 method for $userName with UPN $userUPN (ID: $id)"
+                        } else {
+                            Remove-MgUserAuthenticationFido2Method -UserId $userUPN -Fido2AuthenticationMethodId $id
+                            Write-Host -ForegroundColor Green "Removed FIDO2 method for user $userName with UPN $userUPN"
+                            Add-Content -Path $LogPath -Value "Removed FIDO2 method for $userName with UPN $userUPN (ID: $id)"
+                        }
+                    }
+                    "#microsoft.graph.phoneAuthenticationMethod" {
+                        if ($DryRun) {
+                            Write-Host "[Dry Run] Would remove Phone method for user $userName with UPN $userUPN"
+                            Add-Content -Path $LogPath -Value "[Dry Run] Phone method for $userName with UPN $userUPN (ID: $id)"
+                        } else {
+                            Remove-MgUserAuthenticationPhoneMethod -UserId $userUPN -PhoneAuthenticationMethodId $id
+                            Write-Host -ForegroundColor Green "Removed Phone method for user $userName with UPN $userUPN"
+                            Add-Content -Path $LogPath -Value "Removed Phone method for $userName with UPN $userUPN (ID: $id)"
+                        }
+                    }
+                    "#microsoft.graph.softwareOathAuthenticationMethod" {
+                        if ($DryRun) {
+                            Write-Host "[Dry Run] Would remove Software OATH method for user $userName with UPN $userUPN"
+                            Add-Content -Path $LogPath -Value "[Dry Run] Software OATH method for $userName with UPN $userUPN (ID: $id)"
+                        } else {
+                            Remove-MgUserAuthenticationSoftwareOathMethod -UserId $userUPN -SoftwareOathAuthenticationMethodId $id
+                            Write-Host -ForegroundColor Green "Removed Software OATH method for user $userName with UPN $userUPN"
+                            Add-Content -Path $LogPath -Value "Removed Software OATH method for $userName with UPN $userUPN (ID: $id)"
+                        }
+                    }
+                    "#microsoft.graph.temporaryAccessPassAuthenticationMethod" {
+                        if ($DryRun) {
+                            Write-Host "[Dry Run] Would remove Temporary Access Pass method for user $userName with UPN $userUPN"
+                            Add-Content -Path $LogPath -Value "[Dry Run] Temporary Access Pass method for $userName with UPN $userUPN (ID: $id)"
+                        } else {
+                            Remove-MgUserAuthenticationTemporaryAccessPassMethod -UserId $userUPN -TemporaryAccessPassAuthenticationMethodId $id
+                            Write-Host -ForegroundColor Green "Removed Temporary Access Pass method for user $userName with UPN $userUPN"
+                            Add-Content -Path $LogPath -Value "Removed Temporary Access Pass method for $userName with UPN $userUPN (ID: $id)"
+                        }
+                    }
+                    "#microsoft.graph.windowsHelloForBusinessAuthenticationMethod" {
+                        if ($DryRun) {
+                            Write-Host "[Dry Run] Would remove Windows Hello for Business method for user $userName with UPN $userUPN"
+                            Add-Content -Path $LogPath -Value "[Dry Run] Windows Hello for Business method for $userName with UPN $userUPN (ID: $id)"
+                        } else {
+                            Remove-MgUserAuthenticationWindowsHelloForBusinessMethod -UserId $userUPN -WindowsHelloForBusinessAuthenticationMethodId $id
+                            Write-Host -ForegroundColor Green "Removed Windows Hello for Business method for user $userName with UPN $userUPN"
+                            Add-Content -Path $LogPath -Value "Removed Windows Hello for Business method for $userName with UPN $userUPN (ID: $id)"
+                        }
+                    }
+                    default {
+                        Write-Host -ForegroundColor Yellow "Unknown method type $type for ID $id"
+                        Add-Content -Path $LogPath -Value "Unknown method type $type for $userName with UPN $userUPN (ID: $id)"
+                    }
+                }
             }
         }
     }
 
-    $status = if ($mfaMethods.Count -gt 0) { "MFA Enabled" } else { "No MFA" }
-    $methodsString = if ($mfaMethods.Count -gt 0) { $mfaMethods -join ", " } else { "None" }
-
-    $results += [PSCustomObject]@{
-        DisplayName = $userName
-        UserPrincipalName = $userUPN
-        MFAStatus = $status
-        MFAMethods = $methodsString
-    }
+    End {}
 }
 
-# Export to CSV
-$results | Export-Csv -Path "c:\ft\SoundPharma-MFA_Status_Report.csv" -NoTypeInformation
-
-###################################################################################
-#################################################################################
-##Get any users not in an MFA enforced group if using Conditional Access Policies
-#Get All Conditional Access Policies
-Connect-MgGraph -Scopes "User.Read.All", "Policy.Read.All", "Group.Read.All"
-
-$policies = Get-MgIdentityConditionalAccessPolicy | Where-Object {
-    $_.Conditions -and $_.GrantControls.BuiltInControls -contains "mfa"
-}
-
-#Extract the groups from the policies
-$groupIds = $policies.Conditions.Users.IncludeGroups
-
-#Get the members of the groups
-$enforcedUsers = foreach ($groupId in $groupIds) {
-    Get-MgGroupMember -GroupId $groupId -All | Where-Object {
-        $_.AdditionalProperties.'@odata.type' -eq '#microsoft.graph.user'
-    } | Select-Object -ExpandProperty Id
-}
-
-#Get all users in the tenant
-$allUsers = Get-MgUser -All | Select-Object Id, UserPrincipalName
-
-#Compare the lists to find users not in any enforced group
-$unenforcedUsers = $allUsers | Where-Object {
-    $enforcedUsers -notcontains $_.Id
-}
-
-$unenforcedUsers | Select-Object UserPrincipalName
-
-#Export to CSV
-$unenforcedUsers | Export-Csv -Path "C:\FT\SoundPharma-UsersWithoutMFAEnforcement.csv" -NoTypeInformation
-#################################################################################
 
 #################################################################################
-# Revoke Sign-In Sessions for an array of users
-Connect-MgGraph -Scopes "User.ReadWrite.All"
+#Get user roles
+Connect-MgGraph -Scopes "RoleManagement.Read.Directory", "Directory.Read.All"
 
-# Configuration
-#Fill in the users' UPNs here
-#Example: $users = @("user1@contoso.com", "user2@contoso.com")
-$users = @()
-$dryRun = $true
-$logPath = "C:\FT\SessionRevokeLog.txt"
+# Replace with the user's UPN or Object ID
+$userId = "user@domain.com"
 
-# Do the thing
-foreach ($userUPN in $users) {
-    try {
-        $userObj = Get-MgUser -UserId $userUPN
-        $userName = $userObj.DisplayName
+# Get role assignments
+Get-MgDirectoryRoleAssignment | Where-Object { $_.PrincipalId -eq (Get-MgUser -UserId $userId).Id }
+#################################################################################
+#################################################################################
+# Ensure Microsoft Graph module is installed
+if (-not (Get-Module -ListAvailable -Name Microsoft.Graph)) {
+    Install-Module Microsoft.Graph -Scope CurrentUser -Force
+}
 
-        if ($dryRun) {
-            Write-Host "[Dry Run] Would revoke all sign in sessions for user $userName with UPN $userUPN"
-            Add-Content -Path $logPath -Value "[Dry Run] Would set password for user $userName with UPN $userUPN"
-        } 
-        else {
-            Revoke-MgUserSignInSession -UserId $userUPN
-            Write-Host -ForegroundColor Green "Sign in sessions revoked for user $userName with UPN $userUPN"
-            Add-Content -Path $logPath -Value "Sign in sessions revoked for user $userName with UPN $userUPN"
+# Connect to Microsoft Graph with required scopes
+Connect-MgGraph -Scopes "RoleManagement.Read.Directory", "Directory.Read.All", "User.Read.All", "AppRoleAssignment.Read.All", "Application.Read.All", "DelegatedPermissionGrant.Read.All"
+
+# Prompt for user UPN or Object ID
+$userId = Read-Host "Enter the user's UPN or Object ID"
+
+# Get user object
+$user = Get-MgUser -UserId $userId
+
+if ($user) {
+    Write-Host "`nUser Found: $($user.DisplayName) ($($user.UserPrincipalName))`n"
+
+    # Get activated directory roles
+    $activatedRoles = Get-MgDirectoryRole
+
+    # Get role assignments for the user
+    $roleAssignments = Get-MgRoleManagementDirectoryRoleAssignment | Where-Object { $_.PrincipalId -eq $user.Id }
+
+    Write-Host "Directory Roles Assigned:"
+    if ($roleAssignments.Count -gt 0) {
+        foreach ($role in $roleAssignments) {
+            $matchedRole = $activatedRoles | Where-Object { $_.RoleTemplateId -eq $role.RoleDefinitionId }
+            if ($matchedRole) {
+                Write-Host "- $($matchedRole.DisplayName)"
+                Write-Host "  Description: $($matchedRole.Description)"
+            } else {
+                Write-Host "- Unknown Role (RoleDefinitionId: $($role.RoleDefinitionId))"
+            }
         }
-    } 
-    catch {
-        Write-Host -ForegroundColor Red "Failed to process user $userUPN. Error $_"
-        Add-Content -Path $logPath -Value "Failed to process user $userUPN. Error $_"
-    }
-}
-
-#################################################################################
-#################################################################################
-#Revoke Sign-In Sessions for a list of users from a csv file
-#Make sure the CSV has a header "UPN" with user principal names
-Connect-MgGraph -Scopes "User.ReadWrite.All"
-
-# Configuration
-$csvPath = "C:\FT\Entra-Sunday.csv"
-$logPath = "C:\FT\PasswordLog-Sunday.txt"
-$dryRun = $false
-
-# Do the thing
-$userList = Import-Csv -Path $csvPath
-
-foreach ($user in $userList) {
-    $userUPN= $user.UPN
-    try {
-        $userObj = Get-MgUser -UserId $userUPN
-        $userName = $userObj.DisplayName
-
-        if ($dryRun) {
-            Write-Host "[Dry Run] Would revoke all sign in sessions for user $userName with UPN $userUPN"
-            Add-Content -Path $logPath -Value "[Dry Run] Would set password for user $userName with UPN $userUPN"
-        } 
-        else {
-            Revoke-MgUserSignInSession -UserId $userUPN
-            Write-Host -ForegroundColor Green "Sign in sessions revoked for user $userName with UPN $userUPN"
-            Add-Content -Path $logPath -Value "Sign in sessions revoked for user $userName with UPN $userUPN"
-        }
-    } 
-    catch {
-        Write-Host -ForegroundColor Red "Failed to process user $userUPN. Error $_"
-        Add-Content -Path $logPath -Value "Failed to process user $userUPN. Error $_"
-    }
-}
-#################################################################################
-#################################################################################
-#Revoke sign-in sessions for all users
-Connect-MgGraph -Scopes "User.ReadWrite.All"
-
-# Configuration
-$logPath = "C:\FT\PasswordLog-Sunday.txt"
-$dryRun = $false
-
-# Do the thing
-$AllUsers = Get-MgUser -All
-
-foreach ($user in $AllUsers) {
-    $userUPN = $user.UPN
-    $userName = $user.DisplayName
-    try {
-        if ($dryRun) {
-            Write-Host "[Dry Run] Would revoke all sign in sessions for user $userName with UPN $userUPN"
-            Add-Content -Path $logPath -Value "[Dry Run] Would set password for user $userName with UPN $userUPN"
-        } 
-        else {
-            Revoke-MgUserSignInSession -UserId $userUPN
-            Write-Host -ForegroundColor Green "Sign in sessions revoked for user $userName with UPN $userUPN"
-            Add-Content -Path $logPath -Value "Sign in sessions revoked for user $userName with UPN $userUPN"
-        }
-    } 
-    catch {
-        Write-Host -ForegroundColor Red "Failed to process user $userUPN. Error $_"
-        Add-Content -Path $logPath -Value "Failed to process user $userUPN. Error $_"
-    }
-}
-#################################################################################
-
-#################################################################################
-#Set the same password for an array of users
-Connect-MgGraph -Scopes "User.ReadWrite.All"
-
-# Configuration
-$users = @("fttest1@stpaulmn.onmicrosoft.com")
-$newPassword = "Cuyo5459"
-$dryRun = $true
-$logPath = "C:\Path\To\Your\PasswordLog.txt"
-
-# Do the thing
-foreach ($userUPN in $users) {
-    $userObj = Get-MgUser -UserId $userUPN
-    $userName = $userObj.DisplayName
-    $params = @{
-        PasswordProfile = @{
-            Password = $newPassword
-            ForceChangePasswordNextSignIn = $true
-        }
-    }
-
-    if ($dryRun) {
-        Write-Host "[Dry Run] Would set password for user $userName with UPN $userUPN"
-        Add-Content -Path $logPath -Value "[Dry Run] Would set password for user $userName with UPN $userUPN"
     } else {
-        try {
-            Update-MgUser -UserId $userUPN -BodyParameter $params
-            Write-Host -ForegroundColor Green "Password set successfully for user $userName with UPN $userUPN"
-            Add-Content -Path $logPath -Value "Password set successfully for user $userName with UPN $userUPN"
-        } catch {
-            Write-Host -ForegroundColor Red "Failed to set password for user $userName with UPN $userUPN. Error: $_"
-            Add-Content -Path $logPath -Value "Failed to set password for user $userName with UPN $userUPN. Error: $_"
-        }
-    }
-}
-
-#################################################################################
-
-#################################################################################
-#Set an array of users' passwords with corresponding array of passwords
-# Connect to Microsoft Graph
-Connect-MgGraph -Scopes "User.ReadWrite.All"
-
-# Configuration
-$users = @("fttest1@stpaulmn.onmicrosoft.com", "fttest2@stpaulmn.onmicrosoft.com")
-$passwords = @("Cuyo5459", "Zeta8821")
-$dryRun = $true
-$logPath = "C:\Path\To\Your\PasswordLog.txt"
-
-# Do the thing
-if ($users.Count -ne $passwords.Count) {
-    Write-Host "Error: The number of users and passwords must match."
-    return
-}
-
-for ($i = 0; $i -lt $users.Count; $i++) {
-    $userUPN = $users[$i]
-    $newPassword = $passwords[$i]
-    $userObj = Get-MgUser -UserId $userUPN
-    $userName = $userObj.DisplayName
-
-    $params = @{
-        PasswordProfile = @{
-            Password = $newPassword
-            ForceChangePasswordNextSignIn = $true
-        }
+        Write-Host "- None"
     }
 
-    if ($dryRun) {
-        Write-Host "[Dry Run] Would set password for user $userName with UPN $userUPN"
-        Add-Content -Path $logPath -Value "[Dry Run] Would set password for user $userName with UPN $userUPN"
+    # Get app role assignments
+    $appRoles = Get-MgUserAppRoleAssignment -UserId $user.Id
+
+    Write-Host "`nApp Role Assignments:"
+    if ($appRoles.Count -gt 0) {
+        foreach ($appRole in $appRoles) {
+            # Try to resolve the application name
+            try {
+                $app = Get-MgServicePrincipal -ServicePrincipalId $appRole.ResourceId
+                $appRoleName = ($app.AppRoles | Where-Object { $_.Id -eq $appRole.AppRoleId }).Value
+                Write-Host "`n- App: $($app.DisplayName)"
+            } catch {
+                Write-Host "- App Role: ResourceId=$($appRole.ResourceId), RoleId=$($appRole.AppRoleId)"
+            }
+        }
     } else {
-        try {
-            Update-MgUser -UserId $userUPN -BodyParameter $params
-            Write-Host -ForegroundColor Green "Password set successfully for user $userName with UPN $userUPN"
-            Add-Content -Path $logPath -Value "Password set successfully for user $userName with UPN $userUPN"
-        } catch {
-            Write-Host -ForegroundColor Red "Failed to set password for user $userName with UPN $userUPN. Error: $_"
-            Add-Content -Path $logPath -Value "Failed to set password for user $userName with UPN $userUPN. Error: $_"
-        }
-    }
-}
-
-#################################################################################
-
-##################################################################################
-#Set users' passwords from a CSV file
-# The CSV should have headers: UPN, Password
-# Connect to Microsoft Graph
-Connect-MgGraph -Scopes "User.ReadWrite.All"
-
-# Configuration
-$csvPath = "C:\FT\Entra-Sunday.csv"
-$logPath = "C:\FT\PasswordLog-Sunday.txt"
-$dryRun = $false
-
-# Do the thing
-$userList = Import-Csv -Path $csvPath
-
-foreach ($user in $userList) {
-    $userUPN = $user.UPN
-    $newPassword = $user.Password
-    $userObj = Get-MgUser -UserId $userUPN
-    $userName = $userObj.DisplayName
-
-    $params = @{
-        PasswordProfile = @{
-            Password = $newPassword
-            ForceChangePasswordNextSignIn = $true
-        }
+        Write-Host "- None"
     }
 
-    if ($dryRun) {
-        Write-Host "[Dry Run] Would set password for user $username with UPN $userUPN"
-        Add-Content -Path $logPath -Value "[Dry Run] Would set password for user $username with UPN $userUPN"
+    # Get delegated permissions (OAuth2PermissionGrants)
+    $delegatedPerms = Get-MgOauth2PermissionGrant | Where-Object { $_.PrincipalId -eq $user.Id }
+
+    Write-Host "`nDelegated Permissions:"
+    if ($delegatedPerms.Count -gt 0) {
+        foreach ($perm in $delegatedPerms) {
+            try {
+                $resourceApp = Get-MgServicePrincipal -ServicePrincipalId $perm.ResourceId
+                Write-Host "- App: $($resourceApp.DisplayName), Scope: $($perm.Scope)"
+            } catch {
+                Write-Host "- Scope: $($perm.Scope), ResourceId: $($perm.ResourceId)"
+            }
+        }
     } else {
+        Write-Host "- None"
+    }
+
+} else {
+    Write-Host "User not found. Please check the UPN or Object ID."
+}
+
+#################################################################################
+# Ensure Microsoft Graph module is installed
+if (-not (Get-Module -ListAvailable -Name Microsoft.Graph)) {
+    Install-Module Microsoft.Graph -Scope CurrentUser -Force
+}
+
+# Connect to Microsoft Graph with required scopes
+Connect-MgGraph -Scopes "RoleManagement.Read.Directory", "Directory.Read.All", "User.Read.All", "AppRoleAssignment.Read.All", "Application.Read.All", "DelegatedPermissionGrant.Read.All"
+
+# Prompt for user UPN or Object ID
+$userId = Read-Host "Enter the user's UPN or Object ID"
+
+# Get user object
+$user = Get-MgUser -UserId $userId
+
+if ($user) {
+    Write-Host "`nUser Found: $($user.DisplayName) ($($user.UserPrincipalName))`n"
+
+    # Get activated directory roles
+    $activatedRoles = Get-MgDirectoryRole
+
+    # Get role assignments for the user
+    $roleAssignments = Get-MgRoleManagementDirectoryRoleAssignment | Where-Object { $_.PrincipalId -eq $user.Id }
+
+    $combinedResults = @()
+    foreach ($role in $roleAssignments) {
+        $matchedRole = $activatedRoles | Where-Object { $_.RoleTemplateId -eq $role.RoleDefinitionId }
+        if ($matchedRole) {
+            $combinedResults += [PSCustomObject]@{
+                Type        = "Directory Role"
+                Source      = $matchedRole.DisplayName
+                RoleName    = $matchedRole.DisplayName
+                Description = $matchedRole.Description
+            }
+        }
+    }
+
+    # Get app role assignments
+    $appRoles = Get-MgUserAppRoleAssignment -UserId $user.Id
+    foreach ($appRole in $appRoles) {
         try {
-            Update-MgUser -UserId $userUPN -BodyParameter $params
-            Write-Host -ForegroundColor Green "Password set successfully for user $username with UPN $userUPN"
-            Add-Content -Path $logPath -Value "Password set successfully for user $username with UPN $userUPN"
+            $app = Get-MgServicePrincipal -ServicePrincipalId $appRole.ResourceId
+            $role = $app.AppRoles | Where-Object { $_.Id -eq $appRole.AppRoleId }
+            $combinedResults += [PSCustomObject]@{
+                Type        = "App Role"
+                Source      = $app.DisplayName
+                RoleName    = $role.Value
+                Description = $role.Description
+            }
         } catch {
-            Write-Host -ForegroundColor Red "Failed to set password for user $username with UPN $userUPN. Error: $_"
-            Add-Content -Path $logPath -Value "Failed to set password for user $username with UPN $userUPN. Error: $_"
-        }
-    }
-}
-
-#################################################################################
-
-#################################################################################
-#Remove all authentication methods for an array of users
-# Connect to Microsoft Graph
-Connect-MgGraph -Scopes "User.ReadWrite.All", "Directory.ReadWrite.All", "UserAuthenticationMethod.ReadWrite.All", "Policy.Read.All", "Group.ReadWrite.All"
-
-# Configuration
-$users = @("fttest1@stpaulmn.onmicrosoft.com")  # Array of user UPNs
-$logPath = "C:\Path\To\Your\Log.txt"            # Path to your log file
-$dryRun = $true                                 # Set to $false to actually remove methods
-
-
-foreach ($userUPN in $users) {
-    $authMethods = Get-MgUserAuthenticationMethod -UserId $userUPN
-    $userObj = Get-MgUser -UserId $userUPN
-    $userName = $userObj.DisplayName
-
-    foreach ($method in $authMethods) {
-        $id = $method.Id
-        $type = $method.AdditionalProperties["@odata.type"]
-
-        switch ($type) {
-            "#microsoft.graph.microsoftAuthenticatorAuthenticationMethod" {
-                if ($dryRun) {
-                    Write-Host "[Dry Run] Would remove Microsoft Authenticator method for user $userName with UPN $userUPN"
-                    Add-Content -Path $logPath -Value "[Dry Run] Microsoft Authenticator method for $userName with UPN $userUPN (ID: $id)"
-                } else {
-                    Remove-MgUserAuthenticationMicrosoftAuthenticatorMethod -UserId $userUPN -MicrosoftAuthenticatorAuthenticationMethodId $id
-                    Write-Host -ForegroundColor Green "Removed Microsoft Authenticator method for user $userName with UPN $userUPN"
-                    Add-Content -Path $logPath -Value "Removed Microsoft Authenticator method for $userName with UPN $userUPN (ID: $id)"
-                }
-            }
-
-            "#microsoft.graph.emailAuthenticationMethod" {
-                if ($dryRun) {
-                    Write-Host "[Dry Run] Would remove Email method for user $userName with UPN $userUPN"
-                    Add-Content -Path $logPath -Value "[Dry Run] Email method for $userName with UPN $userUPN (ID: $id)"
-                } else {
-                    Remove-MgUserAuthenticationEmailMethod -UserId $userUPN -EmailAuthenticationMethodId $id
-                    Write-Host -ForegroundColor Green "Removed Email method for user $userName with UPN $userUPN"
-                    Add-Content -Path $logPath -Value "Removed Email method for $userName with UPN $userUPN (ID: $id)"
-                }
-            }
-
-            "#microsoft.graph.fido2AuthenticationMethod" {
-                if ($dryRun) {
-                    Write-Host "[Dry Run] Would remove FIDO2 method for user $userName with UPN $userUPN"
-                    Add-Content -Path $logPath -Value "[Dry Run] FIDO2 method for $userName with UPN $userUPN (ID: $id)"
-                } else {
-                    Remove-MgUserAuthenticationFido2Method -UserId $userUPN -Fido2AuthenticationMethodId $id
-                    Write-Host -ForegroundColor Green "Removed FIDO2 method for user $userName with UPN $userUPN"
-                    Add-Content -Path $logPath -Value "Removed FIDO2 method for $userName with UPN $userUPN (ID: $id)"
-                }
-            }
-
-            "#microsoft.graph.phoneAuthenticationMethod" {
-                if ($dryRun) {
-                    Write-Host "[Dry Run] Would remove Phone method for user $userName with UPN $userUPN"
-                    Add-Content -Path $logPath -Value "[Dry Run] Phone method for $userName with UPN $userUPN (ID: $id)"
-                } else {
-                    Remove-MgUserAuthenticationPhoneMethod -UserId $userUPN -PhoneAuthenticationMethodId $id
-                    Write-Host -ForegroundColor Green "Removed Phone method for user $userName with UPN $userUPN"
-                    Add-Content -Path $logPath -Value "Removed Phone method for $userName with UPN $userUPN (ID: $id)"
-                }
-            }
-
-            "#microsoft.graph.softwareOathAuthenticationMethod" {
-                if ($dryRun) {
-                    Write-Host "[Dry Run] Would remove Software OATH method for user $userName with UPN $userUPN"
-                    Add-Content -Path $logPath -Value "[Dry Run] Software OATH method for $userName with UPN $userUPN (ID: $id)"
-                } else {
-                    Remove-MgUserAuthenticationSoftwareOathMethod -UserId $userUPN -SoftwareOathAuthenticationMethodId $id
-                    Write-Host -ForegroundColor Green "Removed Software OATH method for user $userName with UPN $userUPN"
-                    Add-Content -Path $logPath -Value "Removed Software OATH method for $userName with UPN $userUPN (ID: $id)"
-                }
-            }
-
-            "#microsoft.graph.temporaryAccessPassAuthenticationMethod" {
-                if ($dryRun) {
-                    Write-Host "[Dry Run] Would remove Temporary Access Pass method for user $userName with UPN $userUPN"
-                    Add-Content -Path $logPath -Value "[Dry Run] Temporary Access Pass method for $userName with UPN $userUPN (ID: $id)"
-                } else {
-                    Remove-MgUserAuthenticationTemporaryAccessPassMethod -UserId $userUPN -TemporaryAccessPassAuthenticationMethodId $id
-                    Write-Host -ForegroundColor Green "Removed Temporary Access Pass method for user $userName with UPN $userUPN"
-                    Add-Content -Path $logPath -Value "Removed Temporary Access Pass method for $userName with UPN $userUPN (ID: $id)"
-                }
-            }
-
-            "#microsoft.graph.windowsHelloForBusinessAuthenticationMethod" {
-                if ($dryRun) {
-                    Write-Host "[Dry Run] Would remove Windows Hello for Business method for user $userName with UPN $userUPN"
-                    Add-Content -Path $logPath -Value "[Dry Run] Windows Hello for Business method for $userName with UPN $userUPN (ID: $id)"
-                } else {
-                    Remove-MgUserAuthenticationWindowsHelloForBusinessMethod -UserId $userUPN -WindowsHelloForBusinessAuthenticationMethodId $id
-                    Write-Host -ForegroundColor Green "Removed Windows Hello for Business method for user $userName with UPN $userUPN"
-                    Add-Content -Path $logPath -Value "Removed Windows Hello for Business method for $userName with UPN $userUPN (ID: $id)"
-                }
-            }
-
-            default {
-                Write-Host -ForegroundColor Yellow "Unknown method type $type for ID $id"
-                Add-Content -Path $logPath -Value "Unknown method type $type for $userName with UPN $userUPN (ID: $id)"
+            $combinedResults += [PSCustomObject]@{
+                Type        = "App Role"
+                Source      = "Unknown"
+                RoleName    = "Unknown"
+                Description = "Could not resolve role"
             }
         }
     }
-}
-#################################################################################
 
-#################################################################################
-# Remove all authentication methods from a CSV file of users
-# The CSV should have the column header: UPN
-
-# Connect to Microsoft Graph
-Connect-MgGraph -Scopes "User.ReadWrite.All", "Directory.ReadWrite.All", "UserAuthenticationMethod.ReadWrite.All", "Policy.Read.All", "Group.ReadWrite.All"
-
-# Configuration
-$csvPath = "C:\FT\Entra-Sunday.csv"        # Path to your CSV file
-$logPath = "C:\FT\MFALog2.txt"            # Path to your log file
-$dryRun = $False                            # Set to $false to actually remove methods
-
-# Import users
-$userList = Import-Csv -Path $csvPath
-
-foreach ($user in $userList) {
-    $userUPN = $user.UPN
-    $authMethods = Get-MgUserAuthenticationMethod -UserId $userUPN
-    $userObj = Get-MgUser -UserId $userUPN
-    $userName = $userObj.DisplayName
-
-    foreach ($method in $authMethods) {
-        $id = $method.Id
-        $type = $method.AdditionalProperties["@odata.type"]
-
-        switch ($type) {
-            "#microsoft.graph.microsoftAuthenticatorAuthenticationMethod" {
-                if ($dryRun) {
-                    Write-Host "[Dry Run] Would remove Microsoft Authenticator method for user $userName with UPN $userUPN"
-                    Add-Content -Path $logPath -Value "[Dry Run] Microsoft Authenticator method for $userName with UPN $userUPN (ID: $id)"
-                } else {
-                    Remove-MgUserAuthenticationMicrosoftAuthenticatorMethod -UserId $userUPN -MicrosoftAuthenticatorAuthenticationMethodId $id
-                    Write-Host -ForegroundColor Green "Removed Microsoft Authenticator method for user $userName with UPN $userUPN"
-                    Add-Content -Path $logPath -Value "Removed Microsoft Authenticator method for $userName with UPN $userUPN (ID: $id)"
+    # Get delegated permissions
+    $delegatedPerms = Get-MgOauth2PermissionGrant | Where-Object { $_.PrincipalId -eq $user.Id }
+    foreach ($perm in $delegatedPerms) {
+        try {
+            $resourceApp = Get-MgServicePrincipal -ServicePrincipalId $perm.ResourceId
+            $scopes = $perm.Scope -split " "
+            foreach ($scope in $scopes) {
+                $combinedResults += [PSCustomObject]@{
+                    Type        = "Delegated Permission"
+                    Source      = $resourceApp.DisplayName
+                    RoleName    = ""
+                    Description = ""
+                    Scope       = $scope
                 }
             }
-
-            "#microsoft.graph.emailAuthenticationMethod" {
-                if ($dryRun) {
-                    Write-Host "[Dry Run] Would remove Email method for user $userName with UPN $userUPN"
-                    Add-Content -Path $logPath -Value "[Dry Run] Email method for $userName with UPN $userUPN (ID: $id)"
-                } else {
-                    Remove-MgUserAuthenticationEmailMethod -UserId $userUPN -EmailAuthenticationMethodId $id
-                    Write-Host -ForegroundColor Green "Removed Email method for user $userName with UPN $userUPN"
-                    Add-Content -Path $logPath -Value "Removed Email method for $userName with UPN $userUPN (ID: $id)"
-                }
-            }
-
-            "#microsoft.graph.fido2AuthenticationMethod" {
-                if ($dryRun) {
-                    Write-Host "[Dry Run] Would remove FIDO2 method for user $userName with UPN $userUPN"
-                    Add-Content -Path $logPath -Value "[Dry Run] FIDO2 method for $userName with UPN $userUPN (ID: $id)"
-                } else {
-                    Remove-MgUserAuthenticationFido2Method -UserId $userUPN -Fido2AuthenticationMethodId $id
-                    Write-Host -ForegroundColor Green "Removed FIDO2 method for user $userName with UPN $userUPN"
-                    Add-Content -Path $logPath -Value "Removed FIDO2 method for $userName with UPN $userUPN (ID: $id)"
-                }
-            }
-
-            "#microsoft.graph.phoneAuthenticationMethod" {
-                if ($dryRun) {
-                    Write-Host "[Dry Run] Would remove Phone method for user $userName with UPN $userUPN"
-                    Add-Content -Path $logPath -Value "[Dry Run] Phone method for $userName with UPN $userUPN (ID: $id)"
-                } else {
-                    Remove-MgUserAuthenticationPhoneMethod -UserId $userUPN -PhoneAuthenticationMethodId $id
-                    Write-Host -ForegroundColor Green "Removed Phone method for user $userName with UPN $userUPN"
-                    Add-Content -Path $logPath -Value "Removed Phone method for $userName with UPN $userUPN (ID: $id)"
-                }
-            }
-
-            "#microsoft.graph.softwareOathAuthenticationMethod" {
-                if ($dryRun) {
-                    Write-Host "[Dry Run] Would remove Software OATH method for user $userName with UPN $userUPN"
-                    Add-Content -Path $logPath -Value "[Dry Run] Software OATH method for $userName with UPN $userUPN (ID: $id)"
-                } else {
-                    Remove-MgUserAuthenticationSoftwareOathMethod -UserId $userUPN -SoftwareOathAuthenticationMethodId $id
-                    Write-Host -ForegroundColor Green "Removed Software OATH method for user $userName with UPN $userUPN"
-                    Add-Content -Path $logPath -Value "Removed Software OATH method for $userName with UPN $userUPN (ID: $id)"
-                }
-            }
-
-            "#microsoft.graph.temporaryAccessPassAuthenticationMethod" {
-                if ($dryRun) {
-                    Write-Host "[Dry Run] Would remove Temporary Access Pass method for user $userName with UPN $userUPN"
-                    Add-Content -Path $logPath -Value "[Dry Run] Temporary Access Pass method for $userName with UPN $userUPN (ID: $id)"
-                } else {
-                    Remove-MgUserAuthenticationTemporaryAccessPassMethod -UserId $userUPN -TemporaryAccessPassAuthenticationMethodId $id
-                    Write-Host -ForegroundColor Green "Removed Temporary Access Pass method for user $userName with UPN $userUPN"
-                    Add-Content -Path $logPath -Value "Removed Temporary Access Pass method for $userName with UPN $userUPN (ID: $id)"
-                }
-            }
-
-            "#microsoft.graph.windowsHelloForBusinessAuthenticationMethod" {
-                if ($dryRun) {
-                    Write-Host "[Dry Run] Would remove Windows Hello for Business method for user $userName with UPN $userUPN"
-                    Add-Content -Path $logPath -Value "[Dry Run] Windows Hello for Business method for $userName with UPN $userUPN (ID: $id)"
-                } else {
-                    Remove-MgUserAuthenticationWindowsHelloForBusinessMethod -UserId $userUPN -WindowsHelloForBusinessAuthenticationMethodId $id
-                    Write-Host -ForegroundColor Green "Removed Windows Hello for Business method for user $userName with UPN $userUPN"
-                    Add-Content -Path $logPath -Value "Removed Windows Hello for Business method for $userName with UPN $userUPN (ID: $id)"
-                }
-            }
-
-            default {
-                Write-Host -ForegroundColor Yellow "Unknown method type $type for ID $id"
-                Add-Content -Path $logPath -Value "Unknown method type $type for $userName with UPN $userUPN (ID: $id)"
+        } catch {
+            $combinedResults += [PSCustomObject]@{
+                Type        = "Delegated Permission"
+                Source      = "Unknown"
+                RoleName    = ""
+                Description = ""
+                Scope       = $perm.Scope
             }
         }
     }
+
+    $combinedResults
+    <# Export combined results to a single CSV file
+    $combinedResults | Export-Csv -Path "UserRolesAndPermissions.csv" -NoTypeInformation
+    Write-Host "All roles and permissions exported to UserRolesAndPermissions.csv"#>
+
+} else {
+    Write-Host "User not found. Please check the UPN or Object ID."
 }
 
-#################################################################################
 
-
-
-
-#https://myaccount.microsoft.com/?ref=MeControl
-#Username: fttestaad@stpaulmn.onmicrosoft.com
-#Password: SpaceMonkey45%
+rocketcyber@warestaurant.onmicrosoft.com

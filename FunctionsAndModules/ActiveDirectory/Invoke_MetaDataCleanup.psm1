@@ -10,7 +10,7 @@ Function Invoke-MetaDataCleanup{
     .PARAMETER DcToRemove
 
     .EXAMPLE
-    Remove-DCFromAD -DcToRemove DC01
+    Invoke-MetaDataCleanup -DcToRemove DC01
     Performs a metadata cleanup of DC01
 
     #>

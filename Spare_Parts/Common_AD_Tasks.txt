@@ -29,7 +29,7 @@ Uninstall-WindowsFeature AD-Domain-Services -IncludeManagementTools
 #####################
 #Repair Domain Trust
 Test-ComputerSecureChannel -Repair -Server <PDCHere> -Credential "<UsernameHere>"
-# Example: Test-ComputerSecureChannel -Repair -Server "DC01" -Credential "FTadmin"
+# Example: $cred = New-Object System.Management.Automation.PSCredential("FTAdmin", (ConvertTo-SecureString "YellowStrawberry43#" -AsPlainText -Force)); Test-ComputerSecureChannel -Repair -Server "AM-DC01" -Credential $cred
 
 #########################
 ##Promote to a DC

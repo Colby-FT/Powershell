@@ -5,8 +5,8 @@ function Get-UserLogonSessions {
 
     .DESCRIPTION
     This function retrieves details about user logon sessions from the Windows Security event log. 
-    It filters the logon events (Event ID 4624) based on the specified username(s) and date range. 
-    The output includes the username, logon time, and logon type for each session.
+    It filters the logon events (Event ID 4624 and 4625) based on the specified username(s) and date range. 
+    The output includes the username, logon time, logon type, IP address, and event status for each session.
 
     This function is useful for investigating user activity, auditing, and troubleshooting logon-related issues.
 
@@ -57,18 +57,43 @@ function Get-UserLogonSessions {
         try {
             $Filter = @{
                 LogName = "Security"
-                Id = 4624
+                Id = 4624, 4625
                 StartTime = $StartDate
                 EndTime = $EndDate
             }
 
-            $LogonSessions = Get-WinEvent -FilterHashtable $Filter -ErrorAction Stop |
-                Where-Object {
-                    ($_.Properties[5].Value -like $UserName)
-                } |
-                Select-Object @{Name = 'UserName'; Expression = { $_.Properties[5].Value }},
-                              @{Name = 'LogonTime'; Expression = { $_.TimeCreated }},
-                              @{Name = 'LogonType'; Expression = { $_.Properties[8].Value }}
+            $events = Get-WinEvent -FilterHashtable $Filter -ErrorAction Stop |
+                ForEach-Object {
+                    $xml = [xml]$_.ToXml()
+                    $data = $xml.Event.EventData.Data
+
+                    $logonType = ($data | Where-Object { $_.Name -eq 'LogonType' } | Select-Object -ExpandProperty '#text') -join ''
+                    $account   = ($data | Where-Object { $_.Name -eq 'TargetUserName' } | Select-Object -ExpandProperty '#text') -join ''
+                    $ip        = ($data | Where-Object { $_.Name -eq 'IpAddress' } | Select-Object -ExpandProperty '#text') -join ''
+
+                    [PSCustomObject]@{
+                        TimeCreated = $_.TimeCreated
+                        EventID     = $_.Id
+                        Account     = $account
+                        IPAddress   = $ip
+                        Status      = if ($_.Id -eq 4624) { 'Success' } else { 'Failure' }
+                        LogonType   = $logonType
+                    }
+                }
+
+            # Apply username filtering (supports multiple wildcard patterns)
+            if ($UserName -and $UserName.Count -gt 0) {
+                $filtered = $events | Where-Object {
+                    foreach ($pattern in $UserName) {
+                        if ($_.Account -like $pattern) { return $true }
+                    }
+                    return $false
+                }
+            } else {
+                $filtered = $events
+            }
+
+            $LogonSessions = $filtered
 
             if ($LogonSessions.Count -eq 0) {
                 Write-Warning "No logon sessions found for the specified criteria."
@@ -76,8 +101,8 @@ function Get-UserLogonSessions {
                 Write-Verbose "Logon sessions retrieved: $($LogonSessions.Count)"
             }
         } catch {
-            Write-Error "An error occurred while retrieving logon sessions: $_.Exception.Message"
-            Write-Debug "Error details: $_"
+            Write-Error ("An error occurred while retrieving logon sessions: {0}" -f $_.Exception.Message)
+            Write-Debug ("Error details: {0}" -f $_)
         }
     }
     end {
