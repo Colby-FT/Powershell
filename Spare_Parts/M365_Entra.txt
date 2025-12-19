@@ -69,15 +69,15 @@ function Get-EntraSecuritySettings {
 
     Process {
         Write-Host "Security Defaults Policy:"
-        Get-MgPolicyIdentitySecurityDefaultEnforcementPolicy | Select-Object -Property DisplayName, Id, IsEnabled
+        Get-MgPolicyIdentitySecurityDefaultEnforcementPolicy | Select-Object DisplayName, Id, IsEnabled
 
-        Write-Host "Allowed Authentication Methods:"
-        Get-MgPolicyAuthenticationMethodPolicy | Select-Object -Property DisplayName, PolicyVersion, AuthenticationMethodConfigurations
-
-        Write-Host "Conditional Access Policies:"
+        Write-Host "`nAllowed Authentication Methods:"
+        Get-MgPolicyAuthenticationMethodPolicy | Select-Object DisplayName, PolicyVersion, AuthenticationMethodConfigurations
+        Write-Host "`nConditional Access Policies:"
         $policies = Get-MgIdentityConditionalAccessPolicy
         if ($policies.Count -gt 0) {
-            Write-host -ForegroundColor DarkGreen "$($policies.Count) Conditional Access policies found."
+            Write-Host -ForegroundColor DarkGreen "$($policies.Count) Conditional Access policies found.`n"
+            $policies | Select-Object DisplayName, Id, State, Conditions, GrantControls | Format-List
         } else {
             Write-Host -ForegroundColor DarkYellow "No Conditional Access policies found."
         }
@@ -199,8 +199,6 @@ function Get-EntraMFAStatus {
         }
     }
 }
-
-
 
 #################################################################################
 #Function to revoke sign-in sessions for users.  With options to Revoke Sign-In Sessions for an array of users, Revoke Sign-In Sessions for a list of users from a csv file, Revoke sign-in sessions for all users
@@ -547,7 +545,6 @@ function Remove-EntraUserAuthenticationMethods {
     End {}
 }
 
-
 #################################################################################
 #Get user roles
 Connect-MgGraph -Scopes "RoleManagement.Read.Directory", "Directory.Read.All"
@@ -732,4 +729,3 @@ if ($user) {
 }
 
 
-rocketcyber@warestaurant.onmicrosoft.com

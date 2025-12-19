@@ -14,9 +14,9 @@ Get-SafeAttachmentPolicy #May not work if Defender for Office is not licensed
 #Check Dkim first because it will list all the domains
 Get-DkimSigningConfig
 #Something like {v=spf1 include:spf.protection.outlook.com -all} indicates this is enabled
-Resolve-DnsName -Name "glendaleheating.com" -Type TXT;
+Resolve-DnsName -Name "jtmconstruction.com" -Type TXT;
 #DNS Name does not exist error indicates that DMARC is not set up
-Resolve-DnsName -Name "_dmarc.glendaleheating.com" -Type TXT;
+Resolve-DnsName -Name "_dmarc.jtmconstruction.com" -Type TXT;
 
 #Check if MFA is enabled for all users
 #Use the MS Graph PowerShell SDK - Details in M365_Entra.txt
@@ -29,6 +29,15 @@ Get-ORCAReport
 <#
 Patch Policy Summary
     Critical patches are installed as soon as available. Non-critical patches are installed after they have been available for 14 days to ensure stability in the systems.
+
+    We use the reported criticality score provided by Microsoft as part of their WUAPI calls. 
+    So it's based on the "Category" in which MS publishes something as a "Security Update" or "Critical Update"
+    https://learn.microsoft.com/en-us/windows/win32/api/wuapi/
+    That's the system that's used (it's the underlying class).
+    Here's the specific method:
+    https://learn.microsoft.com/en-us/windows/win32/api/wuapi/nf-wuapi-icategory-get_categoryid
+    The return is going to have a string that indicates if it's "Critical" "Important" "Security" or "Optional"
+ 
 
 
 #>

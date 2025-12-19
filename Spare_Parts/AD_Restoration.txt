@@ -18,6 +18,7 @@ net start dfsr
 net start dfs
 
 #If that does not work, you can re-build the related registry entries on the PDC
+
 #Verify the path to SysVol
 net share
 #The sysvol path will likely be either C:\Windows\SYSVOL\sysvol or C:\Windows\SYSVOL_DFSR\sysvol
@@ -101,6 +102,43 @@ repadmin /replsummary
 ##Active Directory Web Services (ADWS) to fail
 
 
+
+===================When All DCs were restored from backup===================
+#1) On the DC that you want to be the source of truth (The PDC), run these commands
+#Stop DFSR and DFS services
+net stop dfsr
+net stop dfs
+#Set the BurFlags to 1 to force a non-authoritative sync from this DC
+reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\DFSR\Parameters" /v BurFlags /t REG_DWORD /d 1 /f
+#Clear the replication quarantine, and re-enable AD replication
+reg add "HKLM\SYSTEM\CurrentControlSet\Services\DFSR\Parameters" /v StopReplicationOnAutoRecovery /t REG_DWORD /d 0 /f
+# Set RestoreSYSVOL registry key
+Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\DFSR\Parameters" -Name "RestoreSYSVOL" -Value 1 -Type DWord
+#Re-enable replication manually
+repadmin /options localhost -DISABLE_INBOUND_REPL -DISABLE_OUTBOUND_REPL
+net start dfsr
+net start dfs
+
+
+#2) On all other DCs
+net stop dfsr
+net stop dfs
+#Set the BurFlags to 2 to force an authoritative sync from the PDC
+reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\DFSR\Parameters" /v BurFlags /t REG_DWORD /d 2 /f
+#Clear the replication quarantine, and re-enable AD replication
+reg add "HKLM\SYSTEM\CurrentControlSet\Services\DFSR\Parameters" /v StopReplicationOnAutoRecovery /t REG_DWORD /d 0 /f
+repadmin /options localhost -DISABLE_INBOUND_REPL -DISABLE_OUTBOUND_REPL
+net start dfsr
+net start dfs
+
+
+#3) On PDC Force replication
+repadmin /syncall /AdeP
+
+
+#4) On all DCs check status
+repadmin /replsummary;  repadmin /showrepl
+
 ===================End Steps===================
 #Map replication between each DC
 function Invoke-ADSchemaReplicationAllDCs {
@@ -124,3 +162,80 @@ Invoke-ADSchemaReplicationAllDCs
 #Force replication
 repadmin /syncall /AdeP
 
+
+
+
+===================NTDS===========================
+#On the source of truth
+ntdsutil
+activate instance ntds
+authoritative restore
+quit
+quit
+
+repadmin /syncall /AdeP
+
+
+Flag that says ntds was restored from backup
+reg delete "HKLM\SYSTEM\CurrentControlSet\Services\NTDS\Parameters" /v "DSA Database Restored from Backup" /f
+
+
+
+
+#Run all tests on all the servers in the site, and attempt repairs
+dcdiag /a /c /fix
+
+
+
+
+
+===================Check initial replication status===================
+# Define source and new DC names
+$SourceDC = "shvusdc001"   # Replace with an existing DC
+$NewDC    = $env:COMPUTERNAME  # Current DC
+
+Write-Host "Checking SYSVOL and NTDS replication status on $NewDC..." -ForegroundColor Cyan
+
+# 1. Check DFSR Replication State
+$dfsrState = dfsrdiag ReplicationState 2>$null
+if ($dfsrState) {
+    Write-Host "`n[DFSR] Replication in progress:" -ForegroundColor Yellow
+    $dfsrState
+} else {
+    Write-Host "`n[DFSR] No active replication detected." -ForegroundColor Green
+}
+
+# 2. Check DFSR Backlog
+Write-Host "`nChecking DFSR backlog for SYSVOL..."
+$backlog = dfsrdiag backlog /rgname:"Domain System Volume" /rfname:"SYSVOL Share" /sendingmember:$SourceDC /receivingmember:$NewDC 2>$null
+if ($backlog) {
+    Write-Host "[DFSR] Backlog detected:" -ForegroundColor Yellow
+    $backlog
+} else {
+    Write-Host "[DFSR] No backlog detected (SYSVOL likely in sync)." -ForegroundColor Green
+}
+
+# 3. Check SYSVOL and NETLOGON shares
+Write-Host "`nChecking SYSVOL and NETLOGON shares..."
+$shares = net share
+if ($shares -match "SYSVOL" -and $shares -match "NETLOGON") {
+    Write-Host "[Shares] SYSVOL and NETLOGON are shared." -ForegroundColor Green
+} else {
+    Write-Host "[Shares] SYSVOL/NETLOGON not shared yet." -ForegroundColor Red
+}
+
+# 4. Check NTDS replication status
+Write-Host "`nChecking NTDS replication status..."
+$ntdsStatus = repadmin /showrepl $NewDC /errorsonly
+if ($ntdsStatus) {
+    Write-Host "[NTDS] Replication errors detected:" -ForegroundColor Red
+    $ntdsStatus
+} else {
+    Write-Host "[NTDS] No replication errors detected." -ForegroundColor Green
+}
+
+Write-Host "`nSummary:"
+Write-Host "✔ DFSR active replication: " ($dfsrState -ne $null)
+Write-Host "✔ DFSR backlog: " ($backlog -ne $null)
+Write-Host "✔ SYSVOL shared: " ($shares -match "SYSVOL")
+Write-Host "✔ NTDS replication healthy: " ($ntdsStatus -eq $null)

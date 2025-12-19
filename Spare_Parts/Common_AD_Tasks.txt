@@ -51,7 +51,7 @@ wmic computersystem where name="%computername%" call joindomainorworkgroup name=
 #################################
 #Repair domain trust with NetDom
 netdom resetpwd /Server:<DCName> /UserD:<AdminUN> /PasswordD:<AdminPW>
-Example: netdom resetpwd /Server:DC02 /UserD:ftadmin /PasswordD:Password1!
+Example: netdom resetpwd /Server:shvhdc03 /UserD:cconnolly /PasswordD:SpaceVortex34$
 
 #################################
 #Force replication between specific DCs

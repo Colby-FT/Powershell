@@ -1,0 +1,207 @@
+# Block traffic to/from a specific IP and terminate existing connections
+    $badIP = '46.161.50.108'
+
+    # 1) Block future traffic to/from the IP
+    New-NetFirewallRule -DisplayName "Block $badIP (Inbound)"  -Direction Inbound  -RemoteAddress $badIP -Action Block -Profile Any
+    New-NetFirewallRule -DisplayName "Block $badIP (Outbound)" -Direction Outbound -RemoteAddress $badIP -Action Block -Profile Any
+
+    # 2) Find and kill processes that currently have established TCP sessions with that IP
+    Get-NetTCPConnection |
+        Where-Object { $_.RemoteAddress -eq $badIP -and $_.State -eq 'Established' } |
+        ForEach-Object {
+            try {
+                Stop-Process -Id $_.OwningProcess -Force -ErrorAction Stop
+                Write-Host "Terminated PID $($_.OwningProcess) (local port $($_.LocalPort))"
+            } catch {
+                Write-Warning "Failed to terminate PID $($_.OwningProcess): $($_.Exception.Message)"
+            }
+        }
+
+
+# Gather Antivirus, OS, and BitLocker information
+    # Retrieve product info
+    $av = Get-CimInstance -Namespace "root\SecurityCenter2" -ClassName "AntiVirusProduct"
+    $os = Get-CimInstance -ClassName Win32_OperatingSystem | Select-Object Caption, Version, BuildNumber
+    $bitLocker = Get-BitLockerVolume
+
+    # Loop through each AV product and decode its state
+    foreach ($item in $av) {
+        $state = $item.productState
+        $hex = "{0:X8}" -f $state
+        $bin = [Convert]::ToString($state, 2).PadLeft(32, '0')
+
+        # Decode known states
+        $enabled        = ($state -eq 0x00061100 -or $state -eq 0x00061000)
+        $upToDate       = ($state -eq 0x00061100 -or $state -eq 0x00051100)
+        $realTime       = ($state -eq 0x00061100 -or $state -eq 0x00061000)
+
+        $OutputValue = [PSCustomObject]@{
+            ComputerName            = $env:COMPUTERNAME
+            OSInfo                  = "Operating System Information"
+            OS_Name                 = $os.Caption
+            OS_Version              = $os.Version
+            OS_BuildNumber          = $os.BuildNumber
+            AVInfo                  = "Antivirus Product Information"
+            DisplayName             = $item.displayName
+            ProductState            = $state
+            AV_Enabled              = $enabled
+            Definitions_UpToDate    = $upToDate
+            RealTime_Protection     = $realTime
+            BitLockerInfo           = "BitLocker Volume Information"
+            VolumeMountPoint        = $bitLocker.MountPoint
+            ProtectionStatus        = $bitLocker.ProtectionStatus
+            VolumeStatus            = $bitLocker.VolumeStatus
+
+            
+        }
+        $OutputValue
+
+        ##Output to either UDF or standard out
+        if($env:OutputToUDF -eq 'true'){
+            if($OutputValue){
+                New-ItemProperty -Path HKLM:\SOFTWARE\Centrastage -Name "Custom$env:UDFNumber" -PropertyType String -Value "$OutPutValue" -Force | out-null;
+            }
+            else{
+                Write-host "Nothing found"
+                return
+            }
+        }else{
+            return $OutputValue
+        }
+    }
+
+
+# LabTech Agent Installation Script
+    if (-not (Test-Path -Path "HKLM:\SOFTWARE\LabTech")) {
+        #Create task folder
+        $taskFolder = "LabTech_Install"
+        $FTDir = "$env:SystemDrive\FT"
+        $workingDir = "$FTDir\$taskFolder"
+
+        if(!(Test-Path $workingDir)){mkdir $workingDir}
+
+        #Copy the files from the current folder to the Task Folder.
+        $files = @("Agent_Install.msi","Agent_Install.mst")
+        if(Test-Path "$workingDir\Agent_Install.mst"){remove-item "$workingDir\Agent_Install.mst" -Force}
+        if(Test-Path "$workingDir\Agent_Install.msi"){remove-item "$workingDir\Agent_Install.msi" -Force}
+
+        ForEach($file in $files){
+            Copy-Item .\$file $workingDir\$file -Force
+        }
+
+        #Create path variables
+        $mstPath = Join-Path $workingDir "Agent_Install.mst"
+        $msiPath = Join-Path $workingDir "Agent_Install.msi"
+
+        if(-not (Test-Path $msiPath)){
+            Write-Error "Installer missing: $msiPath"
+            exit 1
+        }
+
+        # Build argument list as separate elements (safer quoting)
+        $splatArgs = @(
+            '/I',
+            $msiPath,
+            "TRANSFORMS=`"$mstPath`"",
+            '/quiet',
+            '/norestart'
+        )
+
+        try {
+            $installProcessVar = Start-Process -FilePath "msiexec.exe" -ArgumentList $splatArgs -Wait -PassThru -NoNewWindow
+            Write-Host "Install exited with code $($installProcessVar.ExitCode)"
+            if($installProcessVar.ExitCode -ne 0){
+                throw "Install Process returned error code: $($installProcessVar.ExitCode)"
+            }
+            if(Test-Path "$workingDir\Agent_Install.mst"){remove-item "$workingDir\Agent_Install.mst" -Force}
+            if(Test-Path "$workingDir\Agent_Install.msi"){remove-item "$workingDir\Agent_Install.msi" -Force}
+        }
+        catch {
+            Write-Error "Installation failed: $_"
+            if(Test-Path "$workingDir\Agent_Install.mst"){remove-item "$workingDir\Agent_Install.mst" -Force}
+            if(Test-Path "$workingDir\Agent_Install.msi"){remove-item "$workingDir\Agent_Install.msi" -Force}
+            exit 1
+        }
+    }
+    Else {
+        if(Test-Path "$workingDir\Agent_Install.mst"){remove-item "$workingDir\Agent_Install.mst" -Force}
+        if(Test-Path "$workingDir\Agent_Install.msi"){remove-item "$workingDir\Agent_Install.msi" -Force}
+        Exit 0;#Exit success.
+    }
+
+
+# Hyper-V Stuff
+    Get-VM | ForEach-Object {
+        $vm = $_
+        $vmHardDisks = Get-VMHardDiskDrive -VMName $vm.Name
+        [PSCustomObject]@{
+            VMName        = $vm.Name
+            VMConfigPath  = $vm.ConfigurationLocation
+            VHDPaths      = ($vmHardDisks.Path -join ", ")
+        }
+    } | Export-Csv -Path "C:\ft\VM-Paths.csv" -NoTypeInformation
+
+
+
+
+    Get-VMSwitch | ForEach-Object {
+        $switch = $_
+        $adapter = Get-NetAdapter | Where-Object { $_.InterfaceDescription -eq $switch.NetAdapterInterfaceDescription }
+
+        [PSCustomObject]@{
+            Name                         = $switch.Name
+            SwitchType                   = $switch.SwitchType
+            NetAdapterName               = $switch.NetAdapterInterfaceDescription
+            AllowManagementOS            = $switch.AllowManagementOS
+            VLAN                         = ($switch | Get-VMNetworkAdapterVlan).AccessVlanId
+            BandwidthReservationMode     = $switch.BandwidthReservationMode
+            Extensions                   = ($switch.Extensions | Select-Object -ExpandProperty Name) -join ", "
+            AdapterMACAddress            = $adapter.MacAddress
+            AdapterStatus                = $adapter.Status
+        }
+    } | Export-Csv -Path "C:\ft\VMSwitches_Detailed.csv" -NoTypeInformation
+
+
+
+    Get the status of the VMs
+    
+    PowerShell
+    get-vm
+    
+    List the checkpoints of a vm
+    
+    PowerShell
+    Get-VMSnapshot -VMName "YourVMName"
+    
+    Consolidate the checkpoints - Make sure the VM is powered off first
+    
+    PowerShell
+    Remove-VMSnapshot -VMName "YourVMName"
+    
+    Check status with get-vm a few times to make sure it is finished merging the disks before moving on to export
+    
+    Export the VM
+    PowerShell
+    export-vm -Name "OPI-DC1-6c9684b59ce54a0c99ab9d65c979e160-active" -Path "d:\VMExports\VMName"
+
+
+# Application Installation and Event Investigation
+    $appName = '*ScreenConnect*'
+
+    ## Get all events from the Application log where the provider is MsiInstaller and the message contains "ScreenConnect"
+    Get-WinEvent -FilterHashtable @{LogName='Application'; ProviderName='MsiInstaller'} | Where-Object { $_.Message -like $appName } | Select-Object TimeCreated, Message
+
+
+    ##Determine who installed
+    #Find the SID
+    Get-WinEvent -FilterHashtable @{LogName='Application'; ID=11707} | Where-Object { $_.Message -like $appName } | Select-Object TimeCreated, Message, UserId
+
+    #Translate the SID to a user
+    $objSID = New-Object System.Security.Principal.SecurityIdentifier("S-1-5-18"); $objUser = $objSID.Translate([System.Security.Principal.NTAccount]); $objUser.Value
+
+
+    ##Get list of installed programs
+    $paths = @('HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*', 'HKLM:\\Software\\Wow6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*'); Get-ItemProperty $paths | Select-Object DisplayName, DisplayVersion, Publisher, InstallDate
+
+    ##Get info for a specific program
+    $paths = @('HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*', 'HKLM:\\Software\\Wow6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*'); Get-ItemProperty $paths | Where-Object { $_.DisplayName -like $appName } | Select-Object DisplayName, DisplayVersion, Publisher, InstallDate, UninstallString
