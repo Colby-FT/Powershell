@@ -1,22 +1,39 @@
+#Install the module
+Install-Module -Name ExchangeOnlineManagement -Force
+Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope CurrentUser
+Import-Module ExchangeOnlineManagement
+
 #Connect to Exchange
 Connect-ExchangeOnline
 
 #Check if external tagging is enabled
 Get-ExternalInOutlook
 
+#Check if DKIM, SPF, and DMARC are enabled
+#Check Dkim first because it will list all the domains
+Get-DkimSigningConfig
+
+#Check SPF records via DNS TXT lookup
+#Something like {v=spf1 include:spf.protection.outlook.com -all} indicates this is enabled
+Resolve-DnsName -Name "<domain.com>" -Type TXT;
+Resolve-DnsName -Name "<otherdomain.net>" -Type TXT;
+    Example:
+        Resolve-DnsName -Name "contoso.com" -Type TXT;
+        Resolve-DnsName -Name "contoso.net" -Type TXT;
+
+#Check DMARC records via DNS TXT lookup
+#DNS Name does not exist error indicates that DMARC is not set up
+Resolve-DnsName -Name "_dmarc.<domain.com>" -Type TXT;
+Resolve-DnsName -Name "_dmarc.<otherdomain.net>" -Type TXT;
+    Example:
+        Resolve-DnsName -Name "_dmarc.contoso.com" -Type TXT;
+        Resolve-DnsName -Name "_dmarc.contoso.net" -Type TXT;
+
 #Check if emails are being pre-screened for potentially maicious attachmnents and links
 Get-MalwareFilterPolicy
 Get-AntiPhishPolicy
 Get-SafeLinksPolicy #May not work if Defender for Office is not licensed
 Get-SafeAttachmentPolicy #May not work if Defender for Office is not licensed
-
-#Check if DKIM, SPF, and DMARC are enabled
-#Check Dkim first because it will list all the domains
-Get-DkimSigningConfig
-#Something like {v=spf1 include:spf.protection.outlook.com -all} indicates this is enabled
-Resolve-DnsName -Name "jtmconstruction.com" -Type TXT;
-#DNS Name does not exist error indicates that DMARC is not set up
-Resolve-DnsName -Name "_dmarc.jtmconstruction.com" -Type TXT;
 
 #Check if MFA is enabled for all users
 #Use the MS Graph PowerShell SDK - Details in M365_Entra.txt
@@ -61,9 +78,8 @@ Notes
     For remote access MFA, make sure to check all possible ways to set up mfa for the remote access
         Specifically, the VPNs may have multiple ways to set up MFA
     If unsure about something, round down or ping Joel
-    We user Cyber QP for privileged account management
+    We use Cyber QP for privileged account management
     If we have a deployment checklist, we can say that we do basic hardening at deployment
-    Do an audit for non-IT users with admin rights via RMM before
     We deploy WebTitan to all clients. So almost all clients will be yes for Protective DNS
     We do not have endpoint application isolation and containment
         EDR, RMM, and RC isolation do not count
