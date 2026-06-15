@@ -85,6 +85,7 @@ function Get-EntraSecuritySettings {
 
     End {}
 }
+Get-EntraSecuritySettings
 
 #################################################################################
 #Function to check MFA status for users.  With options to Check MFA status for a user, Check MFA status for all users, Get any users not in an MFA enforced group if using Conditional Access Policies

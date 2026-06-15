@@ -1,3 +1,378 @@
+#Region Exchange Online
+function Invoke-EXOSecurityAudit {
+    <#
+    .SYNOPSIS
+        Exchange Online Security Configuration Audit
+
+    .DESCRIPTION
+        Installs/imports the ExchangeOnlineManagement module, connects to Exchange Online,
+        and audits key email security settings: external tagging, DKIM, SPF, DMARC,
+        and malware/phishing pre-screening policies.
+
+    .EXAMPLE
+        Invoke-EXOSecurityAudit
+    #>
+
+    # ============================================================
+    # HELPER FUNCTIONS
+    # ============================================================
+
+    function Write-Section {
+        param([string]$Title)
+        $Divider = "-" * 70
+        Write-Host "`n$Divider" -ForegroundColor DarkGray
+        Write-Host "  $Title" -ForegroundColor Yellow
+        Write-Host "$Divider" -ForegroundColor DarkGray
+    }
+
+    function Write-Status {
+        param(
+            [string]$Label,
+            [string]$Value,
+            [string]$Color = "White",
+            [int]$Indent = 2
+        )
+        $Pad = " " * $Indent
+        Write-Host "${Pad}$(($Label + ":").PadRight(20)) $Value" -ForegroundColor $Color
+    }
+
+    function Write-Step {
+        param([string]$Message)
+        Write-Host "  >> $Message" -ForegroundColor DarkCyan
+    }
+
+    function Write-StepOK {
+        param([string]$Message)
+        Write-Host "     [OK] $Message" -ForegroundColor Green
+    }
+
+    function Write-StepWarn {
+        param([string]$Message)
+        Write-Host "     [!!] $Message" -ForegroundColor Yellow
+    }
+
+    function Write-StepFail {
+        param([string]$Message)
+        Write-Host "     [XX] $Message" -ForegroundColor Red
+    }
+
+    # ============================================================
+    # BANNER
+    # ============================================================
+    $Banner = "=" * 70
+    Write-Host "`n$Banner" -ForegroundColor Magenta
+    Write-Host "       EXCHANGE ONLINE SECURITY AUDIT" -ForegroundColor Magenta
+    Write-Host "       $(Get-Date -Format 'dddd, MMMM dd yyyy  HH:mm:ss')" -ForegroundColor DarkMagenta
+    Write-Host "$Banner" -ForegroundColor Magenta
+
+    # ============================================================
+    # PHASE 1 — SETUP
+    # ============================================================
+    Write-Host "`n[ PHASE 1 — SETUP ]`n" -ForegroundColor Cyan
+
+    # Step 1 — Module Check/Install
+    Write-Step "Checking for ExchangeOnlineManagement module..."
+    if (-not (Get-Module -ListAvailable -Name ExchangeOnlineManagement)) {
+        Write-StepWarn "Module not found. Installing..."
+        try {
+            Install-Module -Name ExchangeOnlineManagement -Force -Scope CurrentUser -ErrorAction Stop
+            Write-StepOK "Module installed successfully."
+        } catch {
+            Write-StepFail "Failed to install ExchangeOnlineManagement: $_"
+            return
+        }
+    } else {
+        Write-StepOK "Module already installed."
+    }
+
+    # Step 2 — Execution Policy
+    Write-Step "Setting ExecutionPolicy to Bypass for CurrentUser..."
+    try {
+        Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope CurrentUser -Force -ErrorAction Stop
+        Write-StepOK "ExecutionPolicy set."
+    } catch {
+        Write-StepWarn "Could not set ExecutionPolicy: $_"
+    }
+
+    # Step 3 — Import Module
+    Write-Step "Importing ExchangeOnlineManagement module..."
+    try {
+        Import-Module ExchangeOnlineManagement -ErrorAction Stop
+        Write-StepOK "Module imported."
+    } catch {
+        Write-StepFail "Failed to import module: $_"
+        return
+    }
+
+    # Step 4 — Connect
+    Write-Step "Connecting to Exchange Online..."
+    try {
+        Connect-ExchangeOnline -ErrorAction Stop
+        Write-StepOK "Connected successfully."
+    } catch {
+        Write-StepFail "Failed to connect to Exchange Online: $_"
+        return
+    }
+
+    # ============================================================
+    # PHASE 2 — DATA COLLECTION
+    # ============================================================
+    Write-Host "`n[ PHASE 2 — COLLECTING DATA ]`n" -ForegroundColor Cyan
+
+    $Results = [ordered]@{}
+
+    # Step 5 — External Tagging
+    Write-Step "Checking External Email Tagging..."
+    $ExternalTagging = Get-ExternalInOutlook
+    if ($?) {
+        $Results["ExternalTagging"] = $ExternalTagging
+        Write-StepOK "Retrieved external tagging config."
+    } else {
+        Write-StepWarn "Could not retrieve external tagging config."
+        $Results["ExternalTagging"] = $null
+    }
+
+    # Step 6 — DKIM
+    Write-Step "Checking DKIM Signing Configuration..."
+    try {
+        $DkimConfigs = Get-DkimSigningConfig -ErrorAction Stop
+        $Results["DKIM"] = $DkimConfigs
+        Write-StepOK "Found $($DkimConfigs.Count) DKIM domain(s)."
+    } catch {
+        Write-StepWarn "Could not retrieve DKIM config: $_"
+        $DkimConfigs = @()
+        $Results["DKIM"] = $null
+    }
+
+    # Step 7 — SPF & DMARC per Domain
+    Write-Step "Checking SPF and DMARC for each DKIM domain..."
+    $DomainResults = [System.Collections.Generic.List[object]]::new()
+
+    foreach ($DkimEntry in $DkimConfigs) {
+        $Domain = $DkimEntry.Domain
+        Write-Host "         Domain: $Domain" -ForegroundColor DarkGray
+
+        $DomainRow = [ordered]@{
+            Domain       = $Domain
+            SPF_Status   = "Unknown"
+            SPF_Record   = $null
+            DMARC_Status = "Unknown"
+            DMARC_Record = $null
+        }
+
+        # SPF
+        try {
+            $SpfRecords = Resolve-DnsName -Name $Domain -Type TXT -ErrorAction Stop |
+                Where-Object { $_.Strings -match "v=spf1" }
+            if ($SpfRecords) {
+                $DomainRow["SPF_Record"] = ($SpfRecords.Strings -join " ")
+                $DomainRow["SPF_Status"] = "Configured"
+            } else {
+                $DomainRow["SPF_Status"] = "Not Found"
+            }
+        } catch {
+            $DomainRow["SPF_Status"] = "DNS Lookup Failed"
+        }
+
+        # DMARC
+        try {
+            $DmarcRecords = Resolve-DnsName -Name "_dmarc.$Domain" -Type TXT -ErrorAction Stop |
+                Where-Object { $_.Strings -match "v=DMARC1" }
+            if ($DmarcRecords) {
+                $DomainRow["DMARC_Record"] = ($DmarcRecords.Strings -join " ")
+                $DomainRow["DMARC_Status"] = "Configured"
+            } else {
+                $DomainRow["DMARC_Status"] = "Not Found"
+            }
+        } catch {
+            $DomainRow["DMARC_Status"] = if ($_ -match "DNS name does not exist") {
+                "Not Configured (No DNS Record)"
+            } else {
+                "DNS Lookup Failed"
+            }
+        }
+
+        $DomainResults.Add([PSCustomObject]$DomainRow)
+    }
+
+    $Results["DomainChecks"] = $DomainResults
+
+    # Step 8 — Malware/Phishing Policies
+    Write-Step "Checking Malware and Phishing Pre-Screening Policies..."
+
+    foreach ($Check in @(
+        @{ Key = "MalwareFilterPolicy";  Cmd = { Get-MalwareFilterPolicy } }
+        @{ Key = "AntiPhishPolicy";      Cmd = { Get-AntiPhishPolicy } }
+        @{ Key = "SafeLinksPolicy";      Cmd = { Get-SafeLinksPolicy } }
+        @{ Key = "SafeAttachmentPolicy"; Cmd = { Get-SafeAttachmentPolicy } }
+    )) {
+        try {
+            $Results[$Check.Key] = & $Check.Cmd -ErrorAction Stop
+            Write-StepOK "Retrieved $($Check.Key)."
+        } catch {
+            if ($Check.Key -in @("SafeLinksPolicy", "SafeAttachmentPolicy")) {
+                Write-StepWarn "$($Check.Key) — Not available (Defender for Office 365 license required)."
+                $Results[$Check.Key] = "NOT_LICENSED"
+            } else {
+                Write-StepWarn "Could not retrieve $($Check.Key): $_"
+                $Results[$Check.Key] = $null
+            }
+        }
+    }
+
+    # ============================================================
+    # PHASE 3 — SUMMARY OUTPUT
+    # ============================================================
+    $Divider = "=" * 70
+    Write-Host "`n`n$Divider" -ForegroundColor Magenta
+    Write-Host "       AUDIT SUMMARY" -ForegroundColor Magenta
+    Write-Host "$Divider" -ForegroundColor Magenta
+
+    # ---- External Tagging ----
+    Write-Section "EXTERNAL EMAIL TAGGING"
+    Write-Host "  Prepends a visible warning on emails that originate outside your org." -ForegroundColor DarkGray
+    Write-Host "  Helps users identify potential phishing or spoofed messages at a glance.`n" -ForegroundColor DarkGray
+
+    if ($Results["ExternalTagging"]) {
+        foreach ($Tag in $Results["ExternalTagging"]) {
+            if ($Tag.Enabled) {
+                Write-Status "Status" "ENABLED" -Color Green
+            } else {
+                Write-Status "Status" "DISABLED — Consider enabling this in the M365 admin center." -Color Red
+            }
+        }
+    } else {
+        Write-Status "Status" "Could not retrieve." -Color Red
+    }
+
+    # ---- DKIM ----
+    Write-Section "DKIM SIGNING"
+    Write-Host "  Adds a cryptographic signature to outbound emails." -ForegroundColor DarkGray
+    Write-Host "  Receiving servers use this to verify the message hasn't been tampered with in transit.`n" -ForegroundColor DarkGray
+
+    if ($Results["DKIM"]) {
+        foreach ($d in $Results["DKIM"]) {
+            Write-Host "  $("Domain:".PadRight(20)) $($d.Domain)" -ForegroundColor White
+            if ($d.Enabled) {
+                Write-Status "Status" "ENABLED" -Color Green -Indent 4
+            } else {
+                Write-Status "Status" "DISABLED — Enable in M365 Defender > Email Auth settings." -Color Red -Indent 4
+            }
+            Write-Host ""
+        }
+    } else {
+        Write-Status "Status" "Could not retrieve DKIM config." -Color Red
+    }
+
+    # ---- SPF & DMARC ----
+    Write-Section "SPF AND DMARC (PER DOMAIN)"
+    Write-Host "  SPF  : Defines which mail servers are authorized to send on behalf of your domain." -ForegroundColor DarkGray
+    Write-Host "  DMARC: Instructs receiving servers on what to do if SPF/DKIM checks fail." -ForegroundColor DarkGray
+    Write-Host "         Policy options: none (monitor only), quarantine, reject.`n" -ForegroundColor DarkGray
+
+    foreach ($Row in $Results["DomainChecks"]) {
+        Write-Host "  $("Domain:".PadRight(20)) $($Row.Domain)" -ForegroundColor White
+
+        $SpfColor   = if ($Row.SPF_Status   -eq "Configured") { "Green" } else { "Red" }
+        $DmarcColor = if ($Row.DMARC_Status -eq "Configured") { "Green" } else { "Red" }
+
+        Write-Status "SPF Status" $Row.SPF_Status -Color $SpfColor -Indent 4
+        if ($Row.SPF_Record) {
+            Write-Status "SPF Record" $Row.SPF_Record -Color DarkGray -Indent 4
+        } elseif ($Row.SPF_Status -ne "Configured") {
+            Write-Host "      $((' ' * 20)) Add a TXT record: v=spf1 include:spf.protection.outlook.com -all" -ForegroundColor DarkGray
+        }
+
+        Write-Status "DMARC Status" $Row.DMARC_Status -Color $DmarcColor -Indent 4
+        if ($Row.DMARC_Record) {
+            Write-Status "DMARC Record" $Row.DMARC_Record -Color DarkGray -Indent 4
+        } elseif ($Row.DMARC_Status -ne "Configured") {
+            Write-Host "      $((' ' * 20)) Add a TXT record on _dmarc.$($Row.Domain): v=DMARC1; p=quarantine; rua=mailto:dmarc@$($Row.Domain)" -ForegroundColor DarkGray
+        }
+
+        Write-Host ""
+    }
+
+    # ---- Malware Filter ----
+    Write-Section "MALWARE FILTER POLICY"
+    Write-Host "  Scans inbound and outbound messages for known malware in attachments." -ForegroundColor DarkGray
+    Write-Host "  Part of Exchange Online Protection (EOP) — included with all M365 plans.`n" -ForegroundColor DarkGray
+
+    if ($Results["MalwareFilterPolicy"]) {
+        foreach ($Policy in $Results["MalwareFilterPolicy"]) {
+            Write-Host "  $("Policy:".PadRight(20)) $($Policy.Name)" -ForegroundColor White
+            Write-Status "Action" $Policy.Action -Color Cyan -Indent 4
+            Write-Host ""
+        }
+    } else {
+        Write-Status "Status" "Could not retrieve." -Color Red
+    }
+
+    # ---- Anti-Phish ----
+    Write-Section "ANTI-PHISHING POLICY"
+    Write-Host "  Detects spoofed senders, lookalike domains, and executive impersonation attempts." -ForegroundColor DarkGray
+    Write-Host "  Part of EOP — included with all M365 plans.`n" -ForegroundColor DarkGray
+
+    if ($Results["AntiPhishPolicy"]) {
+        foreach ($Policy in $Results["AntiPhishPolicy"]) {
+            Write-Host "  $("Policy:".PadRight(20)) $($Policy.Name)" -ForegroundColor White
+            $Color = if ($Policy.Enabled) { "Green" } else { "Red" }
+            Write-Status "Enabled" $Policy.Enabled -Color $Color -Indent 4
+            Write-Host ""
+        }
+    } else {
+        Write-Status "Status" "Could not retrieve." -Color Red
+    }
+
+    # ---- Safe Links ----
+    Write-Section "SAFE LINKS POLICY  [Defender for Office 365]"
+    Write-Host "  Rewrites URLs in emails and Teams messages, then scans them at click-time." -ForegroundColor DarkGray
+    Write-Host "  Blocks known malicious destinations even if the link looked safe on delivery." -ForegroundColor DarkGray
+    Write-Host "  Requires Microsoft Defender for Office 365 Plan 1 or Plan 2.`n" -ForegroundColor DarkGray
+
+    if ($Results["SafeLinksPolicy"] -eq "NOT_LICENSED") {
+        Write-Status "Status" "Not available — Defender for Office 365 license not detected." -Color DarkYellow
+    } elseif ($Results["SafeLinksPolicy"]) {
+        foreach ($Policy in $Results["SafeLinksPolicy"]) {
+            Write-Host "  $("Policy:".PadRight(20)) $($Policy.Name)" -ForegroundColor White
+            $Color = if ($Policy.IsEnabled) { "Green" } else { "Red" }
+            Write-Status "Enabled" $Policy.IsEnabled -Color $Color -Indent 4
+            Write-Host ""
+        }
+    } else {
+        Write-Status "Status" "Could not retrieve." -Color Red
+    }
+
+    # ---- Safe Attachments ----
+    Write-Section "SAFE ATTACHMENTS POLICY  [Defender for Office 365]"
+    Write-Host "  Detonates email attachments in an isolated sandbox before delivering them." -ForegroundColor DarkGray
+    Write-Host "  Catches zero-day and novel malware that signature-based scanning would miss." -ForegroundColor DarkGray
+    Write-Host "  Requires Microsoft Defender for Office 365 Plan 1 or Plan 2.`n" -ForegroundColor DarkGray
+
+    if ($Results["SafeAttachmentPolicy"] -eq "NOT_LICENSED") {
+        Write-Status "Status" "Not available — Defender for Office 365 license not detected." -Color DarkYellow
+    } elseif ($Results["SafeAttachmentPolicy"]) {
+        foreach ($Policy in $Results["SafeAttachmentPolicy"]) {
+            Write-Host "  $("Policy:".PadRight(20)) $($Policy.Name)" -ForegroundColor White
+            $Color = if ($Policy.Enable) { "Green" } else { "Red" }
+            Write-Status "Enabled" $Policy.Enable -Color $Color -Indent 4
+            Write-Host ""
+        }
+    } else {
+        Write-Status "Status" "Could not retrieve." -Color Red
+    }
+
+    # ============================================================
+    # FOOTER
+    # ============================================================
+    Write-Host "$Divider" -ForegroundColor Magenta
+    Write-Host "  END OF AUDIT  —  $(Get-Date -Format 'HH:mm:ss')" -ForegroundColor Magenta
+    Write-Host "$Divider`n" -ForegroundColor Magenta
+}
+Invoke-EXOSecurityAudit
+
+#region Individual commands 
+#in case more detailed output is needed, or if you want to pull specific settings without running the whole audit
 #Install the module
 Install-Module -Name ExchangeOnlineManagement -Force
 Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope CurrentUser
@@ -15,33 +390,314 @@ Get-DkimSigningConfig
 
 #Check SPF records via DNS TXT lookup
 #Something like {v=spf1 include:spf.protection.outlook.com -all} indicates this is enabled
-Resolve-DnsName -Name "<domain.com>" -Type TXT;
-Resolve-DnsName -Name "<otherdomain.net>" -Type TXT;
-    Example:
+Resolve-DnsName -Name "<domain>" -Type TXT;
+    <#Example:
         Resolve-DnsName -Name "contoso.com" -Type TXT;
         Resolve-DnsName -Name "contoso.net" -Type TXT;
+        #>
 
 #Check DMARC records via DNS TXT lookup
 #DNS Name does not exist error indicates that DMARC is not set up
-Resolve-DnsName -Name "_dmarc.<domain.com>" -Type TXT;
-Resolve-DnsName -Name "_dmarc.<otherdomain.net>" -Type TXT;
-    Example:
+Resolve-DnsName -Name "_dmarc.<Domain>" -Type TXT;
+    <#Example:
         Resolve-DnsName -Name "_dmarc.contoso.com" -Type TXT;
         Resolve-DnsName -Name "_dmarc.contoso.net" -Type TXT;
+        #>
 
 #Check if emails are being pre-screened for potentially maicious attachmnents and links
 Get-MalwareFilterPolicy
 Get-AntiPhishPolicy
 Get-SafeLinksPolicy #May not work if Defender for Office is not licensed
 Get-SafeAttachmentPolicy #May not work if Defender for Office is not licensed
+#endregion Individual commands
 
+#Endregion Exchange Online
+
+#Region M365 Entra ID (Azure AD)
 #Check if MFA is enabled for all users
 #Use the MS Graph PowerShell SDK - Details in M365_Entra.txt
+#Endregion M365 Entra ID (Azure AD)
 
-#Pull an orca report - Conatins details on many of the common security settings for M365
-Install-Module ORCA -Force
-Get-ORCAReport
+#Region Active Directory
 
+##Password Policies
+# Get the full default domain password policy
+Get-ADDefaultDomainPasswordPolicy
+
+# List all fine-grained password policies in the domain
+Get-ADFineGrainedPasswordPolicy -Filter *
+
+# Get details on a specific policy
+Get-ADFineGrainedPasswordPolicy -Identity "PolicyName"
+
+# See which users/groups a specific PSO applies to
+Get-ADFineGrainedPasswordPolicySubject -Identity "PolicyName"
+
+##Interactive logon: Machine inactivity limit
+#Query GPO (If set through Group Policy)
+Get-GPRegistryValue -Name "Default Domain Policy" `
+    -Key "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" `
+    -ValueName "InactivityTimeoutSecs"
+
+#Endregion Active Directory
+
+#Region WorkStations & Servers
+
+##Interactive logon: Machine inactivity limit
+# Query the registry value directly
+Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" `
+    -Name "InactivityTimeoutSecs" -ErrorAction SilentlyContinue |
+    Select-Object InactivityTimeoutSecs
+
+#Convert to minutes for readability
+$reg = Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" `
+    -Name "InactivityTimeoutSecs" -ErrorAction SilentlyContinue
+
+if ($reg.InactivityTimeoutSecs -gt 0) {
+    Write-Host "Inactivity Timeout: $($reg.InactivityTimeoutSecs) seconds ($([math]::Round($reg.InactivityTimeoutSecs / 60, 1)) minutes)"
+} else {
+    Write-Host "Inactivity Timeout: Not configured or disabled (value is 0)"
+}
+
+##Screen Saver Settings
+# All screen saver related values at once
+Get-ItemProperty -Path "HKCU:\Control Panel\Desktop" | Select-Object ScreenSaveTimeOut, ScreenSaveActive, ScreenSaverIsSecure, "SCRNSAVE.EXE"
+
+#With readable formatting
+$desktop = Get-ItemProperty -Path "HKCU:\Control Panel\Desktop" -ErrorAction SilentlyContinue
+
+[PSCustomObject]@{
+    "Screen Saver Active"         = if ($desktop.ScreenSaveActive -eq "1") { "Yes" } else { "No" }
+    "Screen Saver Timeout (sec)"  = $desktop.ScreenSaveTimeOut
+    "Screen Saver Timeout (min)"  = [math]::Round($desktop.ScreenSaveTimeOut / 60, 1)
+    "Lock on Resume"              = if ($desktop.ScreenSaverIsSecure -eq "1") { "Yes" } else { "No" }
+    "Screen Saver File"           = $desktop."SCRNSAVE.EXE"
+}
+
+##Power Plan - Display off and sleep timeouts
+# Get the active power scheme GUID
+$activePlan = powercfg /getactivescheme
+Write-Host "Active Power Plan: $activePlan"
+
+# Pull display timeout (AC = plugged in, DC = battery)
+powercfg /query SCHEME_CURRENT SUB_VIDEO VIDEOIDLE
+
+# Pull sleep timeout
+powercfg /query SCHEME_CURRENT SUB_SLEEP STANDBYIDLE
+
+
+Function Get-SystemInactivityReport {
+    <#
+    .SYNOPSIS
+        Generates a comprehensive report of machine inactivity, screen saver, and power settings.
+    
+    .DESCRIPTION
+        Collects and displays machine inactivity lock settings (GPO), screen saver configuration,
+        and power plan settings including display off and sleep timeouts in a human-readable format.
+    
+    .EXAMPLE
+        Get-SystemInactivityReport
+    #>
+
+    [CmdletBinding()]
+    param()
+
+    # Helper function to convert seconds to readable format
+    $convertSeconds = {
+        param([uint32]$seconds)
+        if ($null -eq $seconds -or $seconds -eq 0) {
+            return "Never (0)"
+        }
+        $hours = [math]::Floor($seconds / 3600)
+        $minutes = [math]::Floor(($seconds % 3600) / 60)
+        $secs = $seconds % 60
+        
+        $parts = @()
+        if ($hours -gt 0) { $parts += "$hours hr" }
+        if ($minutes -gt 0) { $parts += "$minutes min" }
+        if ($secs -gt 0 -and $hours -eq 0) { $parts += "$secs sec" }
+        
+        return $parts -join " "
+    }
+
+    # Helper to parse hex powercfg values
+    $parsePowercfgValue = {
+        param([string]$output, [string]$settingName)
+        $lines = $output -split "`n"
+        foreach ($line in $lines) {
+            if ($line -match "Current AC Power Setting Index:\s*0x([0-9a-fA-F]+)") {
+                return [Convert]::ToUInt32($matches[1], 16)
+            }
+        }
+        return 0
+    }
+
+    Write-Host ""
+    Write-Host "============================================" -ForegroundColor DarkCyan
+    Write-Host "       SYSTEM INACTIVITY SETTINGS REPORT     " -ForegroundColor Cyan
+    Write-Host "============================================" -ForegroundColor DarkCyan
+    Write-Host ""
+
+    #region Machine Inactivity Lock (GPO)
+    Write-Host "--- Machine Inactivity Lock (GPO) ---" -ForegroundColor Yellow
+    
+    $gpoInactivity = Get-ItemProperty `
+        -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" `
+        -Name "InactivityTimeoutSecs" -ErrorAction SilentlyContinue
+
+    if ($null -ne $gpoInactivity.InactivityTimeoutSecs -and $gpoInactivity.InactivityTimeoutSecs -gt 0) {
+        $timeout = $gpoInactivity.InactivityTimeoutSecs
+        $readable = & $convertSeconds $timeout
+        Write-Host "  Status:        " -NoNewline; Write-Host "Configured" -ForegroundColor Green
+        Write-Host "  Timeout:       $timeout seconds ($readable)"
+    } else {
+        Write-Host "  Status:        " -NoNewline; Write-Host "Not Configured" -ForegroundColor Gray
+        Write-Host "  Timeout:       0 seconds (setting disabled or absent)"
+    }
+    Write-Host ""
+
+    #region Screen Saver Settings
+    Write-Host "--- Screen Saver Settings ---" -ForegroundColor Yellow
+    
+    $desktop = Get-ItemProperty -Path "HKCU:\Control Panel\Desktop" -ErrorAction SilentlyContinue
+
+    $screenSaverActive = if ($desktop.ScreenSaveActive -eq "1") { $true } else { $false }
+    $timeoutSec = [int]$desktop.ScreenSaveTimeOut
+    $isSecure = $desktop.ScreenSaverIsSecure -eq "1"
+    $scrnExe = $desktop."SCRNSAVE.EXE"
+
+    Write-Host "  Enabled:       " -NoNewline
+    if ($screenSaverActive) {
+        Write-Host "Yes" -ForegroundColor Green
+    } else {
+        Write-Host "No" -ForegroundColor Gray
+    }
+
+    if ($timeoutSec -gt 0) {
+        $readable = & $convertSeconds $timeoutSec
+        Write-Host "  Timeout:       $timeoutSec seconds ($readable)"
+    } else {
+        Write-Host "  Timeout:       Not set (immediate or disabled)"
+    }
+
+    Write-Host "  Lock on Resume:" -NoNewline
+    if ($isSecure) {
+        Write-Host " Yes (password required)" -ForegroundColor Green
+    } else {
+        Write-Host " No (no password required)" -ForegroundColor Gray
+    }
+
+    if ([string]::IsNullOrWhiteSpace($scrnExe)) {
+        Write-Host "  Executable:    None specified"
+    } else {
+        $scrnName = Split-Path $scrnExe -Leaf
+        Write-Host "  Executable:    $scrnName"
+        Write-Host "  Full Path:     $scrnExe" -ForegroundColor DarkGray
+    }
+    Write-Host ""
+
+    #region Power Plan
+    Write-Host "--- Active Power Plan ---" -ForegroundColor Yellow
+    
+    $powerScheme = powercfg /getactivescheme 2>$null
+    if ($powerScheme -match "Power Scheme GUID:\s*([0-9a-fA-F-]+)\s+\((.+)\)") {
+        $schemeGuid = $matches[1]
+        $schemeName = $matches[2]
+        Write-Host "  Name:          $schemeName"
+        Write-Host "  GUID:          $schemeGuid"
+    } else {
+        Write-Host "  Unable to retrieve active power plan" -ForegroundColor Red
+    }
+    Write-Host ""
+
+    #region Display Off Timeout
+    Write-Host "--- Display Off Timeout ---" -ForegroundColor Yellow
+    
+    $displayOutput = powercfg /query SCHEME_CURRENT SUB_VIDEO VIDEOIDLE 2>$null
+    $displayTimeout = & $parsePowercfgValue $displayOutput "VIDEOIDLE"
+    
+    if ($displayTimeout -gt 0) {
+        $readable = & $convertSeconds $displayTimeout
+        Write-Host "  AC Power:      $displayTimeout seconds ($readable)"
+    } else {
+        Write-Host "  AC Power:      Never (display stays on)"
+    }
+
+    # Extract DC value from output
+    $dcMatches = [regex]::Match($displayOutput, "Current DC Power Setting Index:\s*0x([0-9a-fA-F]+)")
+    if ($dcMatches.Success) {
+        $dcValue = [Convert]::ToUInt32($dcMatches.Groups[1].Value, 16)
+        if ($dcValue -gt 0) {
+            $readable = & $convertSeconds $dcValue
+            Write-Host "  DC Power:      $dcValue seconds ($readable)" -ForegroundColor DarkGray
+        } else {
+            Write-Host "  DC Power:      Never" -ForegroundColor DarkGray
+        }
+    }
+    Write-Host ""
+
+    #region Sleep Timeout
+    Write-Host "--- Sleep Timeout ---" -ForegroundColor Yellow
+    
+    $sleepOutput = powercfg /query SCHEME_CURRENT SUB_SLEEP STANDBYIDLE 2>$null
+    $sleepTimeout = & $parsePowercfgValue $sleepOutput "STANDBYIDLE"
+    
+    if ($sleepTimeout -gt 0) {
+        $readable = & $convertSeconds $sleepTimeout
+        Write-Host "  AC Power:      $sleepTimeout seconds ($readable)"
+    } else {
+        Write-Host "  AC Power:      Never (sleep disabled)"
+    }
+
+    $dcMatches = [regex]::Match($sleepOutput, "Current DC Power Setting Index:\s*0x([0-9a-fA-F]+)")
+    if ($dcMatches.Success) {
+        $dcValue = [Convert]::ToUInt32($dcMatches.Groups[1].Value, 16)
+        if ($dcValue -gt 0) {
+            $readable = & $convertSeconds $dcValue
+            Write-Host "  DC Power:      $dcValue seconds ($readable)" -ForegroundColor DarkGray
+        } else {
+            Write-Host "  DC Power:      Never" -ForegroundColor DarkGray
+        }
+    }
+    Write-Host ""
+
+    #region Summary Table
+    Write-Host "============================================" -ForegroundColor DarkCyan
+    Write-Host "               SUMMARY TABLE                " -ForegroundColor Cyan
+    Write-Host "============================================" -ForegroundColor DarkCyan
+    Write-Host ""
+    
+    $summaryData = [PSCustomObject]@{
+        "Machine Inactivity Lock" = if ($gpoInactivity.InactivityTimeoutSecs -gt 0) { "$($gpoInactivity.InactivityTimeoutSecs) sec" } else { "Disabled" }
+        "Screen Saver"            = if ($screenSaverActive) { "Enabled" } else { "Disabled" }
+        "Screen Saver Timeout"    = if ($timeoutSec -gt 0) { "$timeoutSec sec" } else { "Not set" }
+        "Screen Saver Lock"       = if ($isSecure) { "Yes" } else { "No" }
+        "Display Off (AC)"       = if ($displayTimeout -gt 0) { "$displayTimeout sec" } else { "Never" }
+        "Sleep (AC)"              = if ($sleepTimeout -gt 0) { "$sleepTimeout sec" } else { "Never" }
+        "Power Plan"              = if ($schemeName) { $schemeName } else { "Unknown" }
+    }
+
+    $summaryData | Format-List
+    Write-Host ""
+
+    # Return object for pipeline use
+    return [PSCustomObject]@{
+        GPOInactivityTimeoutSec = $gpoInactivity.InactivityTimeoutSecs
+        ScreenSaverEnabled       = $screenSaverActive
+        ScreenSaverTimeoutSec    = $timeoutSec
+        ScreenSaverSecure        = $isSecure
+        ScreenSaverExe           = $scrnExe
+        DisplayOffTimeoutSec     = $displayTimeout
+        SleepTimeoutSec          = $sleepTimeout
+        PowerPlanName            = $schemeName
+        PowerPlanGuid            = $schemeGuid
+    }
+}
+Set-Location c:\; Clear-Host; Hostname; Get-SystemInactivityReport
+
+#Endregion WorkStations & Servers
+
+#Region General/Other
 
 <#
 Patch Policy Summary
@@ -54,20 +710,10 @@ Patch Policy Summary
     Here's the specific method:
     https://learn.microsoft.com/en-us/windows/win32/api/wuapi/nf-wuapi-icategory-get_categoryid
     The return is going to have a string that indicates if it's "Critical" "Important" "Security" or "Optional"
- 
-
 
 #>
 
 <#
-Tasks
-    Find the canned responses
-    Create new canned responses
-    Get everything into ITG
-    Read up on Powershell best practices
-    Look deeper into who made ORCA, and what it does
-
-
 Notes
     Outside Senders notification can be set in two different places
     For DKIM and stuff we don't care about the onmicrosoft.com domain, we care about the custom domain
@@ -87,3 +733,5 @@ Notes
         We enforce this for all new clients, but some clients brought over from other MSPs may not have it
     
     #>
+
+#Endregion General/Other
