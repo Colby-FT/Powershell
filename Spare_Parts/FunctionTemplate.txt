@@ -1,29 +1,57 @@
 function Verb-Name {
     <#
     .SYNOPSIS
-    Enter quick description here
-
+        Brief description of the function
+    
     .DESCRIPTION
-    Enter Description Here
-
-    .PARAMETER Param1
-
+        Detailed description of what the function does
+    
+    .PARAMETER InputParam
+        Description of the parameter
+    
     .EXAMPLE
-    Example here
-    Description of example here
-
+        Verb-Name -InputParam "value"
+        Description of example
+    
+    .OUTPUTS
+        Description of return value
+    
     #>
     [CmdletBinding()]
     param (
-
+        [Parameter(Mandatory, Position = 0)]
+        [string]$InputParam,
+        
+        [Parameter(Position = 1)]
+        [ValidateSet("Option1", "Option2", "Option3")]
+        [string]$Mode = "Option1",
+        
+        [switch]$EnableFeature
     )
+    
     Begin {
+        # Initialization code - runs once at the beginning
+        Write-Verbose "Starting function: $($MyInvocation.MyCommand.Name)"
         
+        # Validate prerequisites or set up resources
     }
+    
     Process {
-        
+        # Main processing - runs once for each pipeline input or on each iteration
+        try {
+            # Main function logic
+            
+            # Return the result
+            return "Result"
+        }
+        catch {
+            Write-Error "Failed to process: $_"
+            throw
+        }
     }
+    
     End {
-        
+        # Cleanup code - runs once at the end
+        Write-Verbose "Function completed: $($MyInvocation.MyCommand.Name)"
     }
 }

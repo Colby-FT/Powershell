@@ -1,0 +1,273 @@
+#####################
+#region Header
+#####################
+<#
+.SYNOPSIS
+    Brief description of what the script does
+
+.DESCRIPTION
+    Detailed description of what the script does, when to use it, and any prerequisites
+
+.PARAMETER Param1
+    Description of what Param1 does
+
+.PARAMETER Verbose
+    Enable verbose output
+
+.EXAMPLE
+    .\ScriptName.ps1 -Param1 "value"
+    Description of example
+
+.NOTES
+    Author: Your Name
+    Version: 1.0
+    Created: YYYY-MM-DD
+    
+    Change Log:
+    v1.0 - Initial release
+
+#>
+#endregion Header
+
+#####################
+#region Prerequisites
+#####################
+
+# Uncomment the lines below as needed for your script
+
+# Require minimum PowerShell version
+# #Requires -Version 5.1
+
+# Require specific module(s)
+# #Requires -Module <ModuleName>
+# #Requires -Module <ModuleName>
+
+# Require running as Administrator
+# #Requires -RunAsAdministrator
+
+#endregion Prerequisites
+
+#####################
+#region Variables
+#####################
+
+# Set strict mode and error handling
+Set-StrictMode -Version Latest # Enforces best practices and can help catch errors.
+# $ErrorActionPreference = 'Continue' 'Stop' 'SilentlyContinue' 'Inquire' 'Ignore' #Uncomment to use. Choose the appropriate level for your script.
+
+# Script configuration - EDIT THESE VALUES
+$config = @{
+    # Output settings
+    OutputPath = "$PSScriptRoot\Output"
+    LogPath    = "$PSScriptRoot\Logs"
+    
+    # Behavior settings
+    DefaultParam  = "default_value"
+    MaxRetries    = 3
+    Timeout       = 30
+    
+    # Feature flags
+    EnableLogging = $false # Set to true to enable logging
+    ConfirmAction = $false # Set to true to enable confirmation prompts before actions
+}
+
+<# Script Parameters (uncomment and edit as needed)
+param (
+    [Parameter(Mandatory)]
+    [string]$SomeParam,
+    
+    [Parameter()]
+    [int]$Count = 10,
+    
+    [switch]$Verbose
+)
+#>
+
+#endregion Variables
+
+#####################
+#region Functions
+#####################
+
+function Verb-Name {
+    <#
+    .SYNOPSIS
+        Brief description of the function
+    
+    .DESCRIPTION
+        Detailed description of what the function does
+    
+    .PARAMETER InputParam
+        Description of the parameter
+    
+    .EXAMPLE
+        Verb-Name -InputParam "value"
+        Description of example
+    
+    .OUTPUTS
+        Description of return value
+    
+    #>
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory, Position = 0)]
+        [string]$InputParam,
+        
+        [Parameter(Position = 1)]
+        [ValidateSet("Option1", "Option2", "Option3")]
+        [string]$Mode = "Option1",
+        
+        [switch]$EnableFeature
+    )
+    
+    Begin {
+        # Initialization code - runs once at the beginning
+        Write-Verbose "Starting function: $($MyInvocation.MyCommand.Name)"
+        
+        # Validate prerequisites or set up resources
+    }
+    
+    Process {
+        # Main processing - runs once for each pipeline input or on each iteration
+        try {
+            # Main function logic
+            
+            # Return the result
+            return "Result"
+        }
+        catch {
+            Write-Error "Failed to process: $_"
+            throw
+        }
+    }
+    
+    End {
+        # Cleanup code - runs once at the end
+        Write-Verbose "Function completed: $($MyInvocation.MyCommand.Name)"
+    }
+}
+
+#endregion Functions
+
+######################
+#region Formatting
+#####################
+# Uncomment blocks to use
+
+<#Set a window title and foreground color
+$uiConfig = (Get-Host).UI.RawUI
+$uiConfig.WindowTitle = "Active Directory Toolkit"
+$uiConfig.ForegroundColor = "Cyan"
+#>
+
+<#Create a title block
+Write-Host ""
+Write-Host "===========================================================" -ForeGroundColor Green
+Write-Host "|                                                         |" -ForeGroundColor Green
+Write-Host "|              Active Directory Toolkit                   |" -ForeGroundColor Green
+Write-Host "|                                                         |" -ForeGroundColor Green
+Write-Host "|                Written By: Colby C                      |" -ForeGroundColor Green
+Write-Host "|                                                         |" -ForeGroundColor Green
+Write-Host "===========================================================" -ForeGroundColor Green
+Write-Host ""
+#>
+
+<# Write notes to user or provide initial output
+Write-Host ""
+Write-Host "You are working on $env:ComputerName" -ForeGroundColor Green
+Write-Host ""
+$IPInfo = (Get-NetIPAddress -AddressFamily IPv4).IPAddress
+Write-Host "The IP is $IPInfo" -ForeGroundColor Green
+Write-Host ""
+#>
+
+#endregion Formatting #####
+
+#####################
+#region Main
+#####################
+
+<# Direct execution pattern (uncomment to use)
+try {
+    Write-Host "Starting script: $($MyInvocation.MyCommand.Name)"
+    
+    # Script logic here
+    $result = Verb-Name -InputParam "test"
+    
+    Write-Host "Script completed successfully"
+}
+catch {
+    Write-Error "Script failed: $_"
+    exit 1
+}
+#>
+
+<# Menu-driven execution pattern (uncomment to use)
+do {
+    Write-Host "`n========== Menu =========="
+    Write-Host "1 - Option One"
+    Write-Host "2 - Option Two"
+    Write-Host "3 - Option Three"
+    Write-Host "99 - Exit"
+    
+    $choice = Read-Host "`nChoose an option"
+    
+    switch ($choice) {
+        1 {
+            # Option 1 logic
+            Write-Host "Running Option One..."
+        }
+        2 {
+            # Option 2 logic
+            Write-Host "Running Option Two..."
+        }
+        3 {
+            # Option 3 logic
+            Write-Host "Running Option Three..."
+        }
+        99 {
+            Write-Host "Exiting..."
+            break
+        }
+        default {
+            Write-Warning "Invalid option. Please enter 1, 2, 3, or 99."
+        }
+    }
+} while ($choice -ne 99)
+#>
+
+<# Parameter-driven execution pattern (uncomment to use)
+[CmdletBinding()]
+param (
+    [Parameter(Mandatory)]
+    [string]$Action,
+    
+    [Parameter()]
+    [string]$Target
+)
+
+try {
+    switch ($Action) {
+        'Create' {
+            # Create logic
+        }
+        'Update' {
+            # Update logic
+        }
+        'Delete' {
+            # Delete logic
+        }
+        default {
+            throw "Unknown action: $Action"
+        }
+    }
+}
+catch {
+    Write-Error $_
+    exit 1
+}
+#>
+
+#endregion Main
+
+# End of script

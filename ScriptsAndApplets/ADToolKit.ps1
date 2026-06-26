@@ -1,3 +1,5 @@
+#####################
+#region Header ######
 <#
 .SYNOPSIS
 A toolkit of some common AD tasks
@@ -19,11 +21,13 @@ A toolkit of some common AD tasks
 13 - Reset Kerberos password
 99 - Exit
 
-ToDo: Purge DNS gets most, but not all entries.  Especially struggles in domains with lots of sites
+ToDo:
 #>
 
+#endregion Header ######
+
 #######################
-##### Functions ######
+#region Functions ######
 #####################
 #Function to create the working directory
 function Set-ProjectFolder {
@@ -1153,8 +1157,10 @@ function Invoke-ADSchemaReplicationAllDCs {
     }
 }
 
+#endregion Functions #####
+
 #######################
-##### Formatting #####
+#region Formatting #####
 #####################
 
 ####Set a window title and foreground color
@@ -1198,9 +1204,10 @@ Write-Host "RID Master : $((Get-ADDomain).RIDMaster)" -ForeGroundColor Green
 Write-Host "Infrastructure Master : $((Get-ADDomain).InfrastructureMaster)"  -ForeGroundColor Green
 Write-Host ""
 
+#endregion Formatting #####
 
 #########################
-##### Do The Thing #####
+#region Do The Thing #####
 #######################
 do {
     # Prompt the user to choose an option
@@ -1499,3 +1506,5 @@ do {
         default { Write-Output "Invalid choice. Please choose an option from 0 to 15, or 99." }
     }
 } while ($userChoice -ne 99)
+
+#endregion Do The Thing
