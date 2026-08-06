@@ -84,7 +84,7 @@ $config = @{
     TargetAV   = $null
     MinDelay   = 5
     MaxRetries = 3
-    Timeout    = 300
+    Timeout    = 120
     LogPath    = $LogPath
     
     # Feature flags
@@ -569,7 +569,7 @@ function Invoke-UninstallExecution {
         [Parameter(Mandatory)]
         [string]$UninstallString,
 
-        [int]$Timeout = 300
+        [int]$Timeout = 120
     )
 
     $Result = [PSCustomObject]@{
@@ -749,21 +749,18 @@ function Invoke-SilentUninstall {
     Process {
         $UninstallSuccess = $false
         $Attempts = 0
+        $SelectedUninstallString = $null
+        $VerificationPassed = $false
+        $ExecutionError = $null
 
-        $RegistryCommand = $null
-        if ($QuietUninstallStr -and $QuietUninstallStr.Trim() -ne "") {
-            $RegistryCommand = $QuietUninstallStr
-        }
-        elseif ($UninstallStr -and $UninstallStr.Trim() -ne "") {
-            $RegistryCommand = $UninstallStr
-        }
+        $SelectedUninstallString = if ($QuietUninstallStr -and $QuietUninstallStr.Trim() -ne "") { $QuietUninstallStr } elseif ($UninstallStr -and $UninstallStr.Trim() -ne "") { $UninstallStr } else { $null }
 
-        if ($RegistryCommand) {
+        if ($SelectedUninstallString) {
             try {
                 Write-Verbose "Attempting registry uninstall command for: $AVName"
                 $Attempts++
 
-                $ValidatedCommand = Invoke-CommandValidation -UninstallString $RegistryCommand
+                $ValidatedCommand = Invoke-CommandValidation -UninstallString $SelectedUninstallString
                 if (-not $ValidatedCommand) {
                     throw "Unable to construct a valid uninstall command from the registry"
                 }
@@ -771,8 +768,9 @@ function Invoke-SilentUninstall {
                 Add-Content -Path $config.LogPath -Value "Executing registry command: $ValidatedCommand"
                 Write-Host "Executing registry command: $ValidatedCommand" -ForegroundColor Gray
 
-                $ExecutionResult = Invoke-UninstallExecution -UninstallString $ValidatedCommand -Timeout 300
+                $ExecutionResult = Invoke-UninstallExecution -UninstallString $ValidatedCommand -Timeout $config.Timeout
                 $UninstallSuccess = $ExecutionResult.Success
+                $ExecutionError = $ExecutionResult.Error
 
                 if ($UninstallSuccess) {
                     Write-Host "Registry uninstall command succeeded for $AVName" -ForegroundColor Green
@@ -785,8 +783,9 @@ function Invoke-SilentUninstall {
                 Start-Sleep -Seconds $config.MinDelay
             }
             catch {
-                Write-Warning "Registry uninstall failed for $($AVName): $_"
-                Add-Content -Path $config.LogPath -Value "Registry uninstall failed: $_"
+                $ExecutionError = $_.Exception.Message
+                Write-Warning "Registry uninstall failed for $($AVName): $ExecutionError"
+                Add-Content -Path $config.LogPath -Value "Registry uninstall failed: $ExecutionError"
             }
         }
 
@@ -803,11 +802,17 @@ function Invoke-SilentUninstall {
                     
                     if ($Process.ExitCode -eq 0 -or $Process.ExitCode -eq 3010) {
                         $UninstallSuccess = $true
+                        $ExecutionError = $null
                         break
+                    }
+                    else {
+                        $ExecutionError = "MSI uninstall returned exit code $($Process.ExitCode)"
                     }
                 }
                 catch {
-                    Write-Warning "Method 3 failed for $($AVName) with ProductCode $($ProductCode): $_"
+                    $ExecutionError = $_.Exception.Message
+                    Write-Warning "Method 3 failed for $($AVName) with ProductCode $($ProductCode): $ExecutionError"
+                    Add-Content -Path $config.LogPath -Value "Method 3 failed: $ExecutionError"
                 }
             }
             Start-Sleep -Seconds $config.MinDelay
@@ -835,7 +840,11 @@ function Invoke-SilentUninstall {
                                         
                                         if ($Process.ExitCode -eq 0 -or $Process.ExitCode -eq 3010) {
                                             $UninstallSuccess = $true
+                                            $ExecutionError = $null
                                             break
+                                        }
+                                        else {
+                                            $ExecutionError = "Known uninstaller returned exit code $($Process.ExitCode)"
                                         }
                                         
                                         Start-Sleep -Seconds 2
@@ -844,8 +853,9 @@ function Invoke-SilentUninstall {
                                     if ($UninstallSuccess) { break }
                                 }
                                 catch {
-                                    Write-Warning "Method 4 failed for $($AVName) at $($Path): $_"
-                                    Add-Content -Path $config.LogPath -Value "Method 4 failed: $_"
+                                    $ExecutionError = $_.Exception.Message
+                                    Write-Warning "Method 4 failed for $($AVName) at $($Path): $ExecutionError"
+                                    Add-Content -Path $config.LogPath -Value "Method 4 failed: $ExecutionError"
                                 }
                             }
                         }
@@ -855,11 +865,27 @@ function Invoke-SilentUninstall {
                 }
             }
         }
-        
+
+        if ($UninstallSuccess) {
+            $VerificationPassed = Test-ApplicationUninstalled -AppName $AVInfo.DisplayName -InstallLocation $InstallLoc
+            if (-not $VerificationPassed) {
+                $ExecutionError = "Uninstall completed but verification check failed"
+                Write-Warning "Verification failed for $($AVInfo.DisplayName)"
+                $UninstallSuccess = $false
+            }
+        }
+
         return [PSCustomObject]@{
-            Success   = $UninstallSuccess
-            Attempts  = $Attempts
-            AVName    = $AVName
+            DisplayName         = $AVInfo.DisplayName
+            AVName              = $AVName
+            UninstallString     = $UninstallStr
+            QuietUninstallString= $QuietUninstallStr
+            SelectedCommand     = $SelectedUninstallString
+            InstallLocation     = $InstallLoc
+            Success             = $UninstallSuccess
+            VerificationPassed  = $VerificationPassed
+            Error               = $ExecutionError
+            Attempts            = $Attempts
         }
     }
     
@@ -918,7 +944,7 @@ function Remove-UnwantedAV {
         Add-Content -Path $config.LogPath -Value "=== AV Removal Log - $(Get-Date) ==="
         
         Write-Host "===========================================================" -ForegroundColor Cyan
-        Write-Host "|          Unwanted AV Removal Tool v2.0                   |" -ForegroundColor Cyan
+        Write-Host "|          Unwanted AV Removal Tool v3.0                   |" -ForegroundColor Cyan
         Write-Host "===========================================================" -ForegroundColor Cyan
         Write-Host ""
         Write-Host "Computer: $env:ComputerName" -ForegroundColor Green
@@ -986,15 +1012,14 @@ function Remove-UnwantedAV {
                     Write-Host "  SUCCESS: $($AV.Name) uninstalled" -ForegroundColor Green
                 }
                 else {
-                    Write-Host "  FAILED: Could not uninstall $($AV.Name)" -ForegroundColor Red
+                    Write-Host "  FAILED: Could not uninstall $($AV.Name) - $($Result.Error)" -ForegroundColor Red
                 }
                 Write-Host ""
             }
             
             # Final Summary
-            $NormalizedResults = @($Results | Where-Object { $_ -is [psobject] -and $_.PSObject.Properties.Name -contains 'Success' })
-            $SuccessCount = @($NormalizedResults | Where-Object { $_.Success -eq $true }).Count
-            $FailCount = @($NormalizedResults | Where-Object { $_.Success -ne $true }).Count
+            $SuccessCount = @($Results | Where-Object { $_.Success -eq $true }).Count
+            $FailCount = @($Results | Where-Object { $_.Success -ne $true }).Count
             
             Write-Host "===========================================================" -ForegroundColor Cyan
             Write-Host "|                      SUMMARY                            |" -ForegroundColor Cyan
@@ -1010,7 +1035,7 @@ function Remove-UnwantedAV {
                 Count = $DetectedAVs.Count
                 Success = [int]$SuccessCount
                 Failed = [int]$FailCount
-                AVs = $NormalizedResults
+                AVs = $Results
             }
         }
         else {
@@ -1058,7 +1083,7 @@ try {
             exit 1
         }
         else {
-            Write-Host "Exit Code: 0 (Success - all AVs removed)" -ForegroundColor Green
+            Write-Host "Exit Code: 0 (Success)" -ForegroundColor Green
             exit 0
         }
     }

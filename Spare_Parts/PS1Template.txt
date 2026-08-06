@@ -1,33 +1,41 @@
-#####################
-#region Header
-#####################
+#Requires -Version 5.1
+
 <#
 .SYNOPSIS
-    Brief description of what the script does
+    Elite PowerShell script template with multiple function archetypes.
 
 .DESCRIPTION
-    Detailed description of what the script does, when to use it, and any prerequisites
+    A runnable, well-structured script template demonstrating Worker, Utility,
+    Orchestrator, API, and Performance function patterns. It includes centralized
+    configuration, formal logging, and a safe default execution path.
 
 .PARAMETER Param1
-    Description of what Param1 does
+    An optional string parameter for parameter-driven execution.
 
-.PARAMETER Verbose
-    Enable verbose output
+.PARAMETER EnableLogging
+    Enables file-based logging to the path defined in $script:Config.LogPath.
 
 .EXAMPLE
-    .\ScriptName.ps1 -Param1 "value"
-    Description of example
+    .\ScriptName.ps1 -Param1 "value" -EnableLogging -Verbose
 
 .NOTES
     Author: Your Name
-    Version: 1.0
+    Version: 2.0
     Created: YYYY-MM-DD
-    
-    Change Log:
-    v1.0 - Initial release
 
+    Change Log:
+    v2.0 - Restructured param block, added Write-Log, safe default Main entry point
+    v1.0 - Initial release
 #>
-#endregion Header
+
+[CmdletBinding()]
+param (
+    [Parameter(Position = 0)]
+    [string]$Param1,
+
+    [Parameter()]
+    [switch]$EnableLogging
+)
 
 #####################
 #region Prerequisites
@@ -35,11 +43,7 @@
 
 # Uncomment the lines below as needed for your script
 
-# Require minimum PowerShell version
-# #Requires -Version 5.1
-
 # Require specific module(s)
-# #Requires -Module <ModuleName>
 # #Requires -Module <ModuleName>
 
 # Require running as Administrator
@@ -51,37 +55,26 @@
 #region Variables
 #####################
 
-# Set strict mode and error handling
-Set-StrictMode -Version Latest # Enforces best practices and can help catch errors.
-# $ErrorActionPreference = 'Continue' 'Stop' 'SilentlyContinue' 'Inquire' 'Ignore' #Uncomment to use. Choose the appropriate level for your script.
+# Set error handling preference
+# Valid values: Continue, Stop, SilentlyContinue, Inquire
+# WARNING: 'Ignore' suppresses errors entirely and is not recommended for scripts.
+# $ErrorActionPreference = 'Stop'
 
-# Script configuration - EDIT THESE VALUES
-$config = @{
+# Centralized script configuration
+$script:Config = [ordered]@{
     # Output settings
     OutputPath = "$PSScriptRoot\Output"
     LogPath    = "$PSScriptRoot\Logs"
-    
+
     # Behavior settings
     DefaultParam  = "default_value"
     MaxRetries    = 3
     Timeout       = 30
-    
-    # Feature flags
-    EnableLogging = $false # Set to true to enable logging
-    ConfirmAction = $false # Set to true to enable confirmation prompts before actions
-}
 
-<# Script Parameters (uncomment and edit as needed)
-param (
-    [Parameter(Mandatory)]
-    [string]$SomeParam,
-    
-    [Parameter()]
-    [int]$Count = 10,
-    
-    [switch]$Verbose
-)
-#>
+    # Feature flags
+    EnableLogging = $EnableLogging.IsPresent
+    ConfirmAction = $false
+}
 
 #endregion Variables
 
@@ -89,149 +82,491 @@ param (
 #region Functions
 #####################
 
-function Verb-Name {
+function Write-Log {
     <#
     .SYNOPSIS
-        Brief description of the function
-    
+        Writes a message to the verbose stream and optionally to a log file.
+
     .DESCRIPTION
-        Detailed description of what the function does
-    
-    .PARAMETER InputParam
-        Description of the parameter
-    
-    .EXAMPLE
-        Verb-Name -InputParam "value"
-        Description of example
-    
-    .OUTPUTS
-        Description of return value
-    
+        Centralized logging helper. When $script:Config.EnableLogging is true,
+        messages are appended to $script:Config.LogPath\script.log.
+
+    .PARAMETER Message
+        The message to log.
+
+    .PARAMETER Level
+        The severity level: Info, Warning, or Error.
     #>
     [CmdletBinding()]
     param (
         [Parameter(Mandatory, Position = 0)]
-        [string]$InputParam,
-        
+        [string]$Message,
+
+        [Parameter(Position = 1)]
+        [ValidateSet('Info', 'Warning', 'Error')]
+        [string]$Level = 'Info'
+    )
+
+    $Timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    $LogEntry  = "[$Timestamp] [$Level] $Message"
+
+    switch ($Level) {
+        'Warning' { Write-Warning $Message }
+        'Error'   { Write-Error $Message }
+        default   { Write-Verbose $Message }
+    }
+
+    if ($script:Config.EnableLogging -and $script:Config.LogPath) {
+        if (-not (Test-Path -Path $script:Config.LogPath)) {
+            New-Item -ItemType Directory -Path $script:Config.LogPath -Force | Out-Null
+        }
+        $LogEntry | Out-File -FilePath "$($script:Config.LogPath)\script.log" -Append
+    }
+}
+
+########################################
+#region 1. The "Worker/Cmdlet" Function
+########################################
+
+function Verb-Noun {
+    <#
+    .SYNOPSIS
+        Brief description of the function.
+
+    .DESCRIPTION
+        Detailed description of what the function does.
+
+    .PARAMETER Identity
+        The object or string to be processed. Supports pipeline input.
+
+    .EXAMPLE
+        "Data" | Verb-Noun -Mode Option2
+
+    .OUTPUTS
+        System.String
+    #>
+    [CmdletBinding(DefaultParameterSetName = 'Default')]
+    param (
+        [Parameter(Mandatory, Position = 0, ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true)]
+        [Alias('FullName', 'Name')]
+        [string[]]$Identity,
+
         [Parameter(Position = 1)]
         [ValidateSet("Option1", "Option2", "Option3")]
         [string]$Mode = "Option1",
-        
+
         [switch]$EnableFeature
     )
-    
+
     Begin {
-        # Initialization code - runs once at the beginning
-        Write-Verbose "Starting function: $($MyInvocation.MyCommand.Name)"
-        
-        # Validate prerequisites or set up resources
+        Write-Log -Message "[$($MyInvocation.InvocationName)] Entering Begin block." -Level Info
     }
-    
+
     Process {
-        # Main processing - runs once for each pipeline input or on each iteration
-        try {
-            # Main function logic
-            
-            # Return the result
-            return "Result"
-        }
-        catch {
-            Write-Error "Failed to process: $_"
-            throw
+        foreach ($Item in $Identity) {
+            Write-Log -Message "[$($MyInvocation.InvocationName)] Processing item: $Item" -Level Info
+
+            try {
+                $Result = "Processed: $Item in $Mode mode"
+                Write-Output $Result
+            }
+            catch {
+                $ErrorRecord = [System.Management.Automation.ErrorRecord]::new(
+                    $_,
+                    "ProcessError",
+                    [System.Management.Automation.ErrorCategory]::InvalidOperation,
+                    $Item
+                )
+                $PSCmdlet.WriteError($ErrorRecord)
+            }
         }
     }
-    
+
     End {
-        # Cleanup code - runs once at the end
-        Write-Verbose "Function completed: $($MyInvocation.MyCommand.Name)"
+        Write-Log -Message "[$($MyInvocation.InvocationName)] Entering End block." -Level Info
     }
 }
+
+#endregion 1. The "Worker/Cmdlet" Function
+
+####################################################
+#region 2. The "Utility / Helper" Function
+####################################################
+
+function Get-FormattedTimestamp {
+    <#
+    .SYNOPSIS
+        Returns a formatted timestamp string.
+
+    .DESCRIPTION
+        Generates an ISO 8601 or custom-formatted timestamp based on the provided format string.
+
+    .PARAMETER Format
+        The format string to use. Defaults to ISO 8601.
+
+    .EXAMPLE
+        Get-FormattedTimestamp -Format "yyyy-MM-dd HH:mm:ss"
+    #>
+    [CmdletBinding()]
+    param (
+        [Parameter(Position = 0)]
+        [string]$Format = "yyyy-MM-ddTHH:mm:ss"
+    )
+
+    try {
+        Get-Date -Format $Format
+    }
+    catch {
+        $PSCmdlet.WriteError(
+            [System.Management.Automation.ErrorRecord]::new(
+                $_,
+                "TimestampFormatError",
+                [System.Management.Automation.ErrorCategory]::InvalidArgument,
+                $Format
+            )
+        )
+    }
+}
+
+#endregion 2. The "Utility / Helper" Function
+
+####################################################
+#region 3. The "Controller / Orchestrator" Function
+####################################################
+
+function Sync-EnvironmentData {
+    <#
+    .SYNOPSIS
+        Orchestrates a full environment synchronization.
+
+    .DESCRIPTION
+        Connects to source and target systems, retrieves data, applies transformations,
+        and writes a summary report.
+
+        NOTE: This function references placeholder functions
+        (Connect-SourceSystem, Connect-TargetSystem, Get-SourceData, Write-TargetData)
+        that must be defined elsewhere in the script or imported from a module.
+
+    .PARAMETER Source
+        The source environment identifier.
+
+    .PARAMETER Target
+        The target environment identifier.
+
+    .PARAMETER ReportPath
+        Optional path to write a JSON summary report.
+
+    .EXAMPLE
+        Sync-EnvironmentData -Source "Prod" -Target "Dev" -ReportPath "C:\Reports\sync.json"
+    #>
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    param (
+        [Parameter(Mandatory, Position = 0)]
+        [string]$Source,
+
+        [Parameter(Mandatory, Position = 1)]
+        [string]$Target,
+
+        [Parameter(Position = 2)]
+        [string]$ReportPath
+    )
+
+    $Summary = [ordered]@{
+        StartTime   = Get-Date
+        Source      = $Source
+        Target      = $Target
+        Status      = "Running"
+        ItemsSynced = 0
+        Errors      = [System.Collections.Generic.List[object]]::new()
+    }
+
+    try {
+        Write-Log -Message "[$($MyInvocation.InvocationName)] Establishing connections..." -Level Info
+
+        $SourceSession = Connect-SourceSystem -Environment $Source
+        $TargetSession = Connect-TargetSystem -Environment $Target
+
+        $Data = Get-SourceData -Session $SourceSession
+        foreach ($Item in $Data) {
+            if ($PSCmdlet.ShouldProcess($Item.Id, "Sync to $Target")) {
+                try {
+                    $null = Write-TargetData -Session $TargetSession -Item $Item
+                    $Summary.ItemsSynced++
+                }
+                catch {
+                    $Summary.Errors.Add([pscustomobject]@{
+                        Item      = $Item.Id
+                        Exception = $_.Exception.Message
+                    })
+                }
+            }
+        }
+
+        $Summary.Status = "Completed"
+    }
+    catch {
+        $Summary.Status = "Failed"
+        $PSCmdlet.WriteError(
+            [System.Management.Automation.ErrorRecord]::new(
+                $_,
+                "SyncOrchestrationError",
+                [System.Management.Automation.ErrorCategory]::OperationStopped,
+                $Source
+            )
+        )
+    }
+    finally {
+        $Summary.EndTime = Get-Date
+
+        if ($ReportPath) {
+            $Summary | ConvertTo-Json -Depth 5 | Set-Content -Path $ReportPath
+            Write-Log -Message "[$($MyInvocation.InvocationName)] Report written to $ReportPath" -Level Info
+        }
+
+        Write-Output $Summary
+    }
+}
+
+#endregion 3. The "Controller / Orchestrator" Function
+
+####################################
+#region 4. The "API / Web" Function
+####################################
+
+function Get-ApiResource {
+    <#
+    .SYNOPSIS
+        Retrieves a resource from a REST API.
+
+    .DESCRIPTION
+        Sends an authenticated GET request to the specified API endpoint and returns the parsed response.
+
+    .PARAMETER Session
+        An established API session object containing the base URI and authentication header.
+
+    .PARAMETER ResourceId
+        The unique identifier of the resource to retrieve.
+
+    .PARAMETER ApiVersion
+        The API version to use.
+
+    .EXAMPLE
+        $Session = New-ApiSession -BaseUri "https://api.example.com" -Token $Token
+        Get-ApiResource -Session $Session -ResourceId "12345"
+    #>
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory, Position = 0)]
+        [ValidateNotNull()]
+        [psobject]$Session,
+
+        [Parameter(Mandatory, Position = 1, ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true)]
+        [Alias("Id")]
+        [string[]]$ResourceId,
+
+        [Parameter(Position = 2)]
+        [string]$ApiVersion = "v1"
+    )
+
+    Begin {
+        Write-Log -Message "[$($MyInvocation.InvocationName)] Validating API session..." -Level Info
+
+        if (-not $Session.BaseUri -or -not $Session.Headers) {
+            $Exception = [System.InvalidOperationException]::new("Session object is missing required BaseUri or Headers properties.")
+            $ErrorRecord = [System.Management.Automation.ErrorRecord]::new(
+                $Exception,
+                "InvalidApiSession",
+                [System.Management.Automation.ErrorCategory]::InvalidData,
+                $Session
+            )
+            $PSCmdlet.ThrowTerminatingError($ErrorRecord)
+        }
+
+        $UriBuilder = [System.UriBuilder]::new("$($Session.BaseUri.TrimEnd('/'))/api/$ApiVersion/resources")
+    }
+
+    Process {
+        foreach ($Id in $ResourceId) {
+            try {
+                $UriBuilder.Path = "/api/$ApiVersion/resources/$Id"
+                Write-Log -Message "[$($MyInvocation.InvocationName)] GET $($UriBuilder.Uri)" -Level Info
+
+                $Response = Invoke-RestMethod -Uri $UriBuilder.Uri -Headers $Session.Headers -Method Get -ErrorAction Stop
+                Write-Output $Response
+            }
+            catch [System.Net.WebException] {
+                $PSCmdlet.WriteError(
+                    [System.Management.Automation.ErrorRecord]::new(
+                        $_,
+                        "ApiWebException",
+                        [System.Management.Automation.ErrorCategory]::ConnectionError,
+                        $Id
+                    )
+                )
+            }
+            catch {
+                $PSCmdlet.WriteError(
+                    [System.Management.Automation.ErrorRecord]::new(
+                        $_,
+                        "ApiGeneralError",
+                        [System.Management.Automation.ErrorCategory]::InvalidOperation,
+                        $Id
+                    )
+                )
+            }
+        }
+    }
+
+    End {
+        Write-Log -Message "[$($MyInvocation.InvocationName)] API request batch completed." -Level Info
+    }
+}
+
+#endregion 4. The "API / Web" Function
+
+###############################################
+#region 5. The "Performance-Critical" Function
+###############################################
+
+function Measure-LargeDataset {
+    <#
+    .SYNOPSIS
+        Performs a lightweight calculation across a large dataset.
+
+    .DESCRIPTION
+        Iterates over a collection of objects and computes a running aggregate
+        without emitting intermediate objects to the pipeline.
+
+    .PARAMETER InputObject
+        A large collection of objects to process.
+
+    .PARAMETER PropertyName
+        The numeric property to aggregate.
+
+    .EXAMPLE
+        $Data = Get-Content "C:\data.json" | ConvertFrom-Json
+        Measure-LargeDataset -InputObject $Data -PropertyName "Value"
+    #>
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory, Position = 0)]
+        [object[]]$InputObject,
+
+        [Parameter(Mandatory, Position = 1)]
+        [string]$PropertyName
+    )
+
+    $Stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+    $Sum = 0.0
+    $Count = 0
+
+    try {
+        foreach ($Item in $InputObject) {
+            $Sum += $Item.$PropertyName
+            $Count++
+        }
+
+        [pscustomobject]@{
+            Count      = $Count
+            Sum        = $Sum
+            Average    = if ($Count -gt 0) { $Sum / $Count } else { 0 }
+            DurationMs = $Stopwatch.ElapsedMilliseconds
+        }
+    }
+    catch {
+        $PSCmdlet.WriteError(
+            [System.Management.Automation.ErrorRecord]::new(
+                $_,
+                "AggregationError",
+                [System.Management.Automation.ErrorCategory]::InvalidOperation,
+                $PropertyName
+            )
+        )
+    }
+    finally {
+        $Stopwatch.Stop()
+    }
+}
+
+#endregion 5. The "Performance-Critical" Function
 
 #endregion Functions
 
 ######################
 #region Formatting
 #####################
-# Uncomment blocks to use
 
-<#Set a window title and foreground color
-$uiConfig = (Get-Host).UI.RawUI
-$uiConfig.WindowTitle = "Active Directory Toolkit"
-$uiConfig.ForegroundColor = "Cyan"
+# Optional: Set a window title when running in a console host
+if ($Host.Name -eq 'ConsoleHost') {
+    $Host.UI.RawUI.WindowTitle = "PowerShell Script Toolkit"
+}
+
+# Optional: Display an information banner using pipeline-friendly Write-Information
+<#
+$Banner = @"
+===========================================================
+|                                                         |
+|              PowerShell Script Toolkit                  |
+|                                                         |
+|                Written By: Your Name                    |
+|                                                         |
+===========================================================
+"@
+Write-Information $Banner -InformationAction Continue
 #>
 
-<#Create a title block
-Write-Host ""
-Write-Host "===========================================================" -ForeGroundColor Green
-Write-Host "|                                                         |" -ForeGroundColor Green
-Write-Host "|              Active Directory Toolkit                   |" -ForeGroundColor Green
-Write-Host "|                                                         |" -ForeGroundColor Green
-Write-Host "|                Written By: Colby C                      |" -ForeGroundColor Green
-Write-Host "|                                                         |" -ForeGroundColor Green
-Write-Host "===========================================================" -ForeGroundColor Green
-Write-Host ""
-#>
-
-<# Write notes to user or provide initial output
-Write-Host ""
-Write-Host "You are working on $env:ComputerName" -ForeGroundColor Green
-Write-Host ""
-$IPInfo = (Get-NetIPAddress -AddressFamily IPv4).IPAddress
-Write-Host "The IP is $IPInfo" -ForeGroundColor Green
-Write-Host ""
-#>
-
-#endregion Formatting #####
+#endregion Formatting
 
 #####################
 #region Main
 #####################
 
+# IMPORTANT: Only ONE execution pattern should be active at a time.
+# The default pattern below is safe and runnable out of the box.
+# Uncomment and configure one of the alternative patterns as needed.
+
+# Default pattern: safe entry point
+Write-Log -Message "[$($MyInvocation.MyCommand.Name)] Script started." -Level Info
+
+if ($Param1) {
+    Write-Information "Parameter received: $Param1" -InformationAction Continue
+    $Result = Verb-Noun -Identity $Param1 -Verbose:$VerbosePreference
+    Write-Output $Result
+}
+else {
+    Write-Information "No execution pattern selected. Use -Param1 to trigger the default worker, or configure a pattern in the Main region." -InformationAction Continue
+}
+
+Write-Log -Message "[$($MyInvocation.MyCommand.Name)] Script completed." -Level Info
+
 <# Direct execution pattern (uncomment to use)
 try {
-    Write-Host "Starting script: $($MyInvocation.MyCommand.Name)"
-    
-    # Script logic here
-    $result = Verb-Name -InputParam "test"
-    
-    Write-Host "Script completed successfully"
+    Write-Log -Message "Starting script: $($MyInvocation.MyCommand.Name)" -Level Info
+    $result = Verb-Noun -Identity "test"
+    Write-Log -Message "Script completed successfully" -Level Info
 }
 catch {
-    Write-Error "Script failed: $_"
+    Write-Log -Message "Script failed: $_" -Level Error
     exit 1
 }
 #>
 
 <# Menu-driven execution pattern (uncomment to use)
 do {
-    Write-Host "`n========== Menu =========="
-    Write-Host "1 - Option One"
-    Write-Host "2 - Option Two"
-    Write-Host "3 - Option Three"
-    Write-Host "99 - Exit"
-    
+    Write-Information "`n========== Menu ==========" -InformationAction Continue
+    Write-Information "1 - Option One" -InformationAction Continue
+    Write-Information "2 - Option Two" -InformationAction Continue
+    Write-Information "3 - Option Three" -InformationAction Continue
+    Write-Information "99 - Exit" -InformationAction Continue
+
     $choice = Read-Host "`nChoose an option"
-    
+
     switch ($choice) {
-        1 {
-            # Option 1 logic
-            Write-Host "Running Option One..."
-        }
-        2 {
-            # Option 2 logic
-            Write-Host "Running Option Two..."
-        }
-        3 {
-            # Option 3 logic
-            Write-Host "Running Option Three..."
-        }
-        99 {
-            Write-Host "Exiting..."
-            break
-        }
-        default {
-            Write-Warning "Invalid option. Please enter 1, 2, 3, or 99."
-        }
+        1 { Write-Information "Running Option One..." -InformationAction Continue }
+        2 { Write-Information "Running Option Two..." -InformationAction Continue }
+        3 { Write-Information "Running Option Three..." -InformationAction Continue }
+        99 { Write-Information "Exiting..." -InformationAction Continue; break }
+        default { Write-Warning "Invalid option. Please enter 1, 2, 3, or 99." }
     }
 } while ($choice -ne 99)
 #>
@@ -240,30 +575,23 @@ do {
 [CmdletBinding()]
 param (
     [Parameter(Mandatory)]
+    [ValidateSet('Create', 'Update', 'Delete')]
     [string]$Action,
-    
+
     [Parameter()]
     [string]$Target
 )
 
 try {
     switch ($Action) {
-        'Create' {
-            # Create logic
-        }
-        'Update' {
-            # Update logic
-        }
-        'Delete' {
-            # Delete logic
-        }
-        default {
-            throw "Unknown action: $Action"
-        }
+        'Create' { # Create logic }
+        'Update' { # Update logic }
+        'Delete' { # Delete logic }
+        default  { throw "Unknown action: $Action" }
     }
 }
 catch {
-    Write-Error $_
+    Write-Log -Message $_ -Level Error
     exit 1
 }
 #>
@@ -271,3 +599,6 @@ catch {
 #endregion Main
 
 # End of script
+
+<#Important Note on the Parameter-Driven Pattern
+The commented parameter-driven pattern at the bottom of the Main region contains a second param() block. In PowerShell, a script can only have one param() block, and it must be at the top. If you want to use that pattern, you must replace the top-level param() block with the parameter-driven one, not uncomment it in the Main region. I left it commented as a conceptual example, but it should be moved to the top if activated.#>

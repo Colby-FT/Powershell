@@ -1,26 +1,31 @@
-function Verb-Name {
+########################################
+#region 1. The "Worker/Cmdlet" Function#
+########################################
+# Use this as the default universal starter function.
+# It is not "stuck" in one type of function, but it is biased toward Pipeline usage.
+# It can be easily modified for a wide array of scenarios.
+function Verb-Noun {
     <#
     .SYNOPSIS
-        Brief description of the function
+        Brief description of the function.
     
     .DESCRIPTION
-        Detailed description of what the function does
+        Detailed description of what the function does.
     
-    .PARAMETER InputParam
-        Description of the parameter
+    .PARAMETER Identity
+        The object or string to be processed. Supports pipeline input.
     
     .EXAMPLE
-        Verb-Name -InputParam "value"
-        Description of example
+        "Data" | Verb-Noun -Mode Option2
     
     .OUTPUTS
-        Description of return value
-    
+        System.String
     #>
-    [CmdletBinding()]
+    [CmdletBinding(DefaultParameterSetName = 'Default')]
     param (
-        [Parameter(Mandatory, Position = 0)]
-        [string]$InputParam,
+        [Parameter(Mandatory, Position = 0, ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true)]
+        [Alias('FullName', 'Name')]
+        [string[]]$Identity,
         
         [Parameter(Position = 1)]
         [ValidateSet("Option1", "Option2", "Option3")]
@@ -30,28 +35,335 @@ function Verb-Name {
     )
     
     Begin {
-        # Initialization code - runs once at the beginning
-        Write-Verbose "Starting function: $($MyInvocation.MyCommand.Name)"
-        
-        # Validate prerequisites or set up resources
+        Write-Verbose "[$($MyInvocation.InvocationName)] Entering Begin block."
+        # Initialize expensive resources (e.g., DB connections, API sessions) here
     }
     
     Process {
-        # Main processing - runs once for each pipeline input or on each iteration
-        try {
-            # Main function logic
+        # Iterate through Identity in case an array was passed via parameter rather than pipeline
+        foreach ($Item in $Identity) {
+            Write-Verbose "[$($MyInvocation.InvocationName)] Processing item: $Item"
             
-            # Return the result
-            return "Result"
-        }
-        catch {
-            Write-Error "Failed to process: $_"
-            throw
+            try {
+                # LOGIC GOES HERE
+                $Result = "Processed: $Item in $Mode mode"
+
+                # Output to the success stream without exiting the function
+                Write-Output $Result
+            }
+            catch {
+                # Create a specific error record for better traceability
+                $ErrorRecord = New-Object System.Management.Automation.ErrorRecord(
+                    $_, 
+                    "ProcessError", 
+                    [System.Management.Automation.ErrorCategory]::InvalidOperation, 
+                    $Item
+                )
+                $PSCmdlet.WriteError($ErrorRecord)
+            }
         }
     }
     
     End {
-        # Cleanup code - runs once at the end
-        Write-Verbose "Function completed: $($MyInvocation.MyCommand.Name)"
+        Write-Verbose "[$($MyInvocation.InvocationName)] Entering End block."
+        # Cleanup code (e.g., .Dispose(), closing connections)
     }
 }
+
+#endregion 1. The "Worker/Cmdlet" Function#
+
+####################################################
+#region 2. The "Utility / Helper Function" Function#
+####################################################
+# Good for small, internal calculations or formatting tasks that do not accept pipeline input.
+
+function Get-FormattedTimestamp {
+    <#
+    .SYNOPSIS
+        Returns a formatted timestamp string.
+    
+    .DESCRIPTION
+        Generates an ISO 8601 or custom-formatted timestamp based on the provided format string.
+    
+    .PARAMETER Format
+        The format string to use. Defaults to ISO 8601.
+    
+    .EXAMPLE
+        Get-FormattedTimestamp -Format "yyyy-MM-dd HH:mm:ss"
+    #>
+    [CmdletBinding()]
+    param (
+        [Parameter(Position = 0)]
+        [string]$Format = "yyyy-MM-ddTHH:mm:ss"
+    )
+
+    try {
+        Get-Date -Format $Format
+    }
+    catch {
+        $PSCmdlet.WriteError(
+            [System.Management.Automation.ErrorRecord]::new(
+                $_,
+                "TimestampFormatError",
+                [System.Management.Automation.ErrorCategory]::InvalidArgument,
+                $Format
+            )
+        )
+    }
+}
+
+#endregion 2. The "Utility / Helper Function" Function#
+
+####################################################
+#region 3. The "Controller / Orchestrator" Function#
+####################################################
+# Good for functions that coordinate multiple sub-functions, manage connections, and produce a final report.
+
+function Sync-EnvironmentData {
+    <#
+    .SYNOPSIS
+        Orchestrates a full environment synchronization.
+    
+    .DESCRIPTION
+        Connects to source and target systems, retrieves data, applies transformations, and writes a summary report.
+    
+    .PARAMETER Source
+        The source environment identifier.
+    
+    .PARAMETER Target
+        The target environment identifier.
+    
+    .PARAMETER ReportPath
+        Optional path to write a JSON summary report.
+    
+    .EXAMPLE
+        Sync-EnvironmentData -Source "Prod" -Target "Dev" -ReportPath "C:\Reports\sync.json"
+    #>
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    param (
+        [Parameter(Mandatory, Position = 0)]
+        [string]$Source,
+
+        [Parameter(Mandatory, Position = 1)]
+        [string]$Target,
+
+        [Parameter(Position = 2)]
+        [string]$ReportPath
+    )
+
+    $Summary = [ordered]@{
+        StartTime   = Get-Date
+        Source      = $Source
+        Target      = $Target
+        Status      = "Running"
+        ItemsSynced = 0
+        Errors      = [System.Collections.Generic.List[object]]::new()
+    }
+
+    try {
+        Write-Verbose "[$($MyInvocation.InvocationName)] Establishing connections..."
+
+        # Begin: Setup connections and validate environment
+        $SourceSession = Connect-SourceSystem -Environment $Source
+        $TargetSession = Connect-TargetSystem -Environment $Target
+
+        # Process: Coordinate the work
+        $Data = Get-SourceData -Session $SourceSession
+        foreach ($Item in $Data) {
+            if ($PSCmdlet.ShouldProcess($Item.Id, "Sync to $Target")) {
+                try {
+                    $Result = Write-TargetData -Session $TargetSession -Item $Item
+                    $Summary.ItemsSynced++
+                }
+                catch {
+                    $Summary.Errors.Add([pscustomobject]@{
+                        Item      = $Item.Id
+                        Exception = $_.Exception.Message
+                    })
+                }
+            }
+        }
+
+        $Summary.Status = "Completed"
+    }
+    catch {
+        $Summary.Status = "Failed"
+        $PSCmdlet.WriteError(
+            [System.Management.Automation.ErrorRecord]::new(
+                $_,
+                "SyncOrchestrationError",
+                [System.Management.Automation.ErrorCategory]::OperationStopped,
+                $Source
+            )
+        )
+    }
+    finally {
+        # End: Cleanup and reporting
+        $Summary.EndTime = Get-Date
+
+        if ($ReportPath) {
+            $Summary | ConvertTo-Json -Depth 5 | Set-Content -Path $ReportPath
+            Write-Verbose "[$($MyInvocation.InvocationName)] Report written to $ReportPath"
+        }
+
+        Write-Output $Summary
+    }
+}
+
+#endregion 3. The "Controller / Orchestrator" Function#
+
+####################################
+#region 4. The "API / Web" Function#
+####################################
+# Good for functions that interact with REST APIs or remote services.
+
+function Get-ApiResource {
+    <#
+    .SYNOPSIS
+        Retrieves a resource from a REST API.
+    
+    .DESCRIPTION
+        Sends an authenticated GET request to the specified API endpoint and returns the parsed response.
+    
+    .PARAMETER Session
+        An established API session object containing the base URI and authentication header.
+    
+    .PARAMETER ResourceId
+        The unique identifier of the resource to retrieve.
+    
+    .PARAMETER ApiVersion
+        The API version to use.
+    
+    .EXAMPLE
+        $Session = New-ApiSession -BaseUri "https://api.example.com" -Token $Token
+        Get-ApiResource -Session $Session -ResourceId "12345"
+    #>
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory, Position = 0)]
+        [ValidateNotNull()]
+        [psobject]$Session,
+
+        [Parameter(Mandatory, Position = 1, ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true)]
+        [Alias("Id")]
+        [string[]]$ResourceId,
+
+        [Parameter(Position = 2)]
+        [string]$ApiVersion = "v1"
+    )
+
+    Begin {
+        Write-Verbose "[$($MyInvocation.InvocationName)] Validating API session..."
+
+        if (-not $Session.BaseUri -or -not $Session.Headers) {
+            throw "Session object is missing required BaseUri or Headers properties."
+        }
+
+        $UriBuilder = [System.UriBuilder]::new("$($Session.BaseUri.TrimEnd('/'))/api/$ApiVersion/resources")
+    }
+
+    Process {
+        foreach ($Id in $ResourceId) {
+            try {
+                $UriBuilder.Path = "/api/$ApiVersion/resources/$Id"
+                Write-Verbose "[$($MyInvocation.InvocationName)] GET $($UriBuilder.Uri)"
+
+                $Response = Invoke-RestMethod -Uri $UriBuilder.Uri -Headers $Session.Headers -Method Get -ErrorAction Stop
+
+                Write-Output $Response
+            }
+            catch [System.Net.WebException] {
+                $PSCmdlet.WriteError(
+                    [System.Management.Automation.ErrorRecord]::new(
+                        $_,
+                        "ApiWebException",
+                        [System.Management.Automation.ErrorCategory]::ConnectionError,
+                        $Id
+                    )
+                )
+            }
+            catch {
+                $PSCmdlet.WriteError(
+                    [System.Management.Automation.ErrorRecord]::new(
+                        $_,
+                        "ApiGeneralError",
+                        [System.Management.Automation.ErrorCategory]::InvalidOperation,
+                        $Id
+                    )
+                )
+            }
+        }
+    }
+
+    End {
+        Write-Verbose "[$($MyInvocation.InvocationName)] API request batch completed."
+    }
+}
+
+#endregion 4. The "API / Web" Function#
+
+###############################################
+#region 5. The "Performance-Critical" Function#
+###############################################
+# Good for functions that process large datasets where overhead must be minimized.
+function Measure-LargeDataset {
+    <#
+    .SYNOPSIS
+        Performs a lightweight calculation across a large dataset.
+    
+    .DESCRIPTION
+        Iterates over a collection of objects and computes a running aggregate without emitting intermediate objects to the pipeline.
+    
+    .PARAMETER InputObject
+        A large collection of objects to process.
+    
+    .PARAMETER PropertyName
+        The numeric property to aggregate.
+    
+    .EXAMPLE
+        $Data = Get-Content "C:\data.json" | ConvertFrom-Json
+        Measure-LargeDataset -InputObject $Data -PropertyName "Value"
+    #>
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory, Position = 0)]
+        [array]$InputObject,
+
+        [Parameter(Mandatory, Position = 1)]
+        [string]$PropertyName
+    )
+
+    $Stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+    $Sum = 0.0
+    $Count = 0
+
+    try {
+        # Avoid pipeline overhead by using a foreach loop directly
+        foreach ($Item in $InputObject) {
+            $Sum += $Item.$PropertyName
+            $Count++
+        }
+
+        [pscustomobject]@{
+            Count      = $Count
+            Sum        = $Sum
+            Average    = if ($Count -gt 0) { $Sum / $Count } else { 0 }
+            DurationMs = $Stopwatch.ElapsedMilliseconds
+        }
+    }
+    catch {
+        $PSCmdlet.WriteError(
+            [System.Management.Automation.ErrorRecord]::new(
+                $_,
+                "AggregationError",
+                [System.Management.Automation.ErrorCategory]::InvalidOperation,
+                $PropertyName
+            )
+        )
+    }
+    finally {
+        $Stopwatch.Stop()
+    }
+}
+
+#endregion 5. The "Performance-Critical" Function#
