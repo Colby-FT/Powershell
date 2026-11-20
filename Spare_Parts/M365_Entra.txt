@@ -1,91 +1,242 @@
-#################################################################################
-#Helper function to Install the MS Graph PowerShell SDK modules needed for the other functions.
+####################################################
+#region 1. Utility: 5.1-safe error writer
+####################################################
+
+function Write-ErrorRecord {
+    <#
+    .SYNOPSIS
+        Safely writes the current caught error to the error stream.
+
+    .DESCRIPTION
+        Reuses $_ directly when it is already an ErrorRecord (the normal case
+        with -ErrorAction Stop), and only falls back to New-Object construction
+        for raw .NET exceptions. New-Object resolves overloads at runtime and
+        is safe on Windows PowerShell 5.1, where [ErrorRecord]::new(4 args)
+        can throw MethodException.
+
+    .PARAMETER Context
+        The error context (function name / operation) for verbose tracing.
+    #>
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory, Position = 0)]
+        [string]$Context
+    )
+
+    if ($_ -is [System.Management.Automation.ErrorRecord]) {
+        $PSCmdlet.WriteError($_)
+    }
+    else {
+        $ErrorRecord = New-Object System.Management.Automation.ErrorRecord(
+            $_.Exception, "$Context.Error",
+            [System.Management.Automation.ErrorCategory]::InvalidOperation, $null
+        )
+        $PSCmdlet.WriteError($ErrorRecord)
+    }
+
+    Write-Verbose "[$Context] Error written: $($_.Exception.Message)"
+}
+
+#endregion 1. Utility: 5.1-safe error writer
+
+########################################
+#region 2. Worker: module install/import
+########################################
 
 function Install-MgGraphModules {
     <#
     .SYNOPSIS
-    Installs required Microsoft Graph PowerShell SDK modules if not already installed.
+        Installs and imports the Microsoft Graph modules needed for the Entra ID audit.
 
     .DESCRIPTION
-    Checks for and installs Microsoft.Graph, Microsoft.Graph.Identity.SignIns, Microsoft.Graph.Groups, and Microsoft.Graph.Users.Actions modules.
+        Installs the required Graph sub-modules at a single pinned version and
+        imports them cleanly into the session.
+
+        WHY THE PIN: Graph SDK sub-modules are released in lockstep and their
+        .psd1 manifests require the exact matching Microsoft.Graph.Authentication
+        version, so ALL modules must be the same version. Versions 2.36.0
+        through 2.39.0 of Microsoft.Graph.Authentication throw a
+        TypeLoadException on GetTokenAsync at import time on Windows PowerShell
+        5.1 (microsoftgraph/msgraph-sdk-powershell #3479, microsoft/vscode
+        #331947). 2.35.0 is the last known-good version on PS 5.1.
+
+    .PARAMETER ModuleVersion
+        The version to pin ALL Graph modules to. Defaults to 2.35.0.
 
     .EXAMPLE
-    Install-MgGraphModules
-    Installs all required modules if missing.
+        Install-MgGraphModules
+
+    .EXAMPLE
+        Install-MgGraphModules -ModuleVersion "2.35.0"
     #>
     [CmdletBinding()]
-    param ()
+    param (
+        [Parameter(Position = 0)]
+        [string]$ModuleVersion = "2.35.0"
+    )
 
-    Begin {}
+    Begin {
+        Write-Verbose "[$($MyInvocation.InvocationName)] Starting Microsoft Graph module setup (pin: $ModuleVersion)."
 
-    Process {
-        if (-not (Get-Module -ListAvailable -Name Microsoft.Graph)) {
-            Write-Host "Installing Microsoft.Graph module..."
-            Install-Module Microsoft.Graph -Scope CurrentUser -Force
-        }
-        if (-not (Get-Module -ListAvailable -Name Microsoft.Graph.Identity.SignIns)) {
-            Install-Module Microsoft.Graph.Identity.SignIns -Scope CurrentUser -Force
-            Write-Host "Microsoft.Graph.Identity.SignIns module installed successfully."
-        }
-        if (-not (Get-Module -ListAvailable -Name Microsoft.Graph.Groups)) {
-            Install-Module Microsoft.Graph.Groups -Scope CurrentUser -Force
-            Write-Host "Microsoft.Graph.Groups module installed successfully."
-        }
-        if (-not (Get-Module -ListAvailable -Name Microsoft.Graph.Users.Actions)) {
-            Install-Module Microsoft.Graph.Users.Actions -Scope CurrentUser -Force
-            Write-Host "Microsoft.Graph.Users.Actions module installed successfully."
-        }  else {
-            Write-Host "MS Graph modules already installed."
-        }
-        Import-Module Microsoft.Graph.Identity.SignIns
-        Import-Module Microsoft.Graph.Groups
-        Import-Module Microsoft.Graph.Users.Actions
+        $RequiredModules = @(
+            'Microsoft.Graph.Authentication'
+            'Microsoft.Graph.Identity.SignIns'
+            'Microsoft.Graph.Identity.DirectoryManagement'
+            'Microsoft.Graph.Groups'
+            'Microsoft.Graph.Users.Actions'
+        )
     }
 
-    End {}
+    Process {
+        # --- Install / repair each module at the pinned version ---
+        foreach ($Mod in $RequiredModules) {
+            $HasVersion = Get-Module -ListAvailable -Name $Mod -ErrorAction SilentlyContinue |
+                Where-Object { $_.Version -eq ([version]$ModuleVersion) }
+
+            if ($HasVersion) {
+                Write-Verbose "[$($MyInvocation.InvocationName)] $Mod $ModuleVersion already present."
+                continue
+            }
+
+            Write-Verbose "[$($MyInvocation.InvocationName)] Installing $Mod $ModuleVersion ..."
+            try {
+                Install-Module -Name $Mod -RequiredVersion $ModuleVersion `
+                    -Scope CurrentUser -Force -AllowClobber `
+                    -SkipPublisherCheck -ErrorAction Stop
+                Write-Verbose "[$($MyInvocation.InvocationName)] $Mod $ModuleVersion installed."
+            }
+            catch {
+                Write-ErrorRecord -Context "$($MyInvocation.InvocationName) install $Mod $ModuleVersion"
+                return
+            }
+        }
+
+        # --- Clean import: drop half-loaded copies from this session first ---
+        foreach ($Mod in $RequiredModules) {
+            Remove-Module -Name $Mod -ErrorAction SilentlyContinue
+        }
+
+        # Import Authentication FIRST, then the sub-modules whose manifests
+        # require it. -RequiredVersion on every import so a stale higher
+        # version on disk is never silently picked.
+        foreach ($Mod in $RequiredModules) {
+            try {
+                Import-Module -Name $Mod -RequiredVersion $ModuleVersion -ErrorAction Stop
+                Write-Verbose "[$($MyInvocation.InvocationName)] Imported $Mod $ModuleVersion."
+            }
+            catch {
+                Write-ErrorRecord -Context "$($MyInvocation.InvocationName) import $Mod $ModuleVersion"
+                return
+            }
+        }
+    }
+
+    End {
+        Write-Verbose "[$($MyInvocation.InvocationName)] Module setup complete."
+    }
 }
 
-#################################################################################
-#Function to check some common security settings in Entra ID. With options to Check if security defaults are enabled, List allowed authentication methods, Check if there are any Conditional Access Policies
+#endregion 2. Worker: module install/import
+
+####################################################
+#region 3. Orchestrator: Entra ID security audit
+####################################################
 
 function Get-EntraSecuritySettings {
     <#
     .SYNOPSIS
-    Checks common security settings in Entra ID.
+        Checks common security settings in Entra ID.
 
     .DESCRIPTION
-    Checks if security defaults are enabled, lists allowed authentication methods, and checks for Conditional Access Policies.
+        Checks security defaults, the authentication methods policy, Conditional
+        Access policies, and tenant organization info.
 
     .EXAMPLE
-    Get-EntraSecuritySettings
+        Get-EntraSecuritySettings
     #>
     [CmdletBinding()]
     param ()
 
     Begin {
-        Install-MgGraphModules
-        Connect-MgGraph -Scopes "Policy.Read.All" -NoWelcome
-    }
+        Write-Verbose "[$($MyInvocation.InvocationName)] Starting Entra ID security audit."
 
-    Process {
-        Write-Host "Security Defaults Policy:"
-        Get-MgPolicyIdentitySecurityDefaultEnforcementPolicy | Select-Object DisplayName, Id, IsEnabled
+        Install-MgGraphModules -ErrorAction Stop
 
-        Write-Host "`nAllowed Authentication Methods:"
-        Get-MgPolicyAuthenticationMethodPolicy | Select-Object DisplayName, PolicyVersion, AuthenticationMethodConfigurations
-        Write-Host "`nConditional Access Policies:"
-        $policies = Get-MgIdentityConditionalAccessPolicy
-        if ($policies.Count -gt 0) {
-            Write-Host -ForegroundColor DarkGreen "$($policies.Count) Conditional Access policies found.`n"
-            $policies | Select-Object DisplayName, Id, State, Conditions, GrantControls | Format-List
-        } else {
-            Write-Host -ForegroundColor DarkYellow "No Conditional Access policies found."
+        Write-Verbose "[$($MyInvocation.InvocationName)] Connecting to Microsoft Graph..."
+        try {
+            Connect-MgGraph -Scopes "Policy.Read.All", "Organization.Read.All" -NoWelcome -ErrorAction Stop
+        }
+        catch {
+            Write-ErrorRecord -Context "$($MyInvocation.InvocationName) Connect-MgGraph"
+            return
         }
     }
 
-    End {}
+    Process {
+        # --- Security Defaults ---
+        Write-Output "Security Defaults Policy:"
+        try {
+            Get-MgPolicyIdentitySecurityDefaultEnforcementPolicy -ErrorAction Stop |
+                Select-Object DisplayName, Id, IsEnabled
+        }
+        catch {
+            Write-ErrorRecord -Context "$($MyInvocation.InvocationName) SecurityDefaults"
+        }
+
+        # --- Authentication Methods ---
+        Write-Output "`nAllowed Authentication Methods:"
+        try {
+            Get-MgPolicyAuthenticationMethodPolicy -ErrorAction Stop |
+                Select-Object DisplayName, PolicyVersion, AuthenticationMethodConfigurations
+        }
+        catch {
+            Write-ErrorRecord -Context "$($MyInvocation.InvocationName) AuthMethodPolicy"
+        }
+
+        # --- Conditional Access ---
+        Write-Output "`nConditional Access Policies:"
+        try {
+            $Policies = Get-MgIdentityConditionalAccessPolicy -ErrorAction Stop
+            if ($Policies -and $Policies.Count -gt 0) {
+                Write-Output "$($Policies.Count) Conditional Access policies found.`n"
+                $Policies |
+                    Select-Object DisplayName, Id, State, Conditions, GrantControls |
+                    Format-List
+            }
+            else {
+                Write-Warning "No Conditional Access policies found."
+            }
+        }
+        catch {
+            Write-ErrorRecord -Context "$($MyInvocation.InvocationName) ConditionalAccess"
+        }
+
+        # --- Organization ---
+        Write-Output "`nOrganization:"
+        try {
+            Get-MgOrganization -ErrorAction Stop |
+                Select-Object DisplayName, Id, VerifiedDomains
+        }
+        catch {
+            Write-ErrorRecord -Context "$($MyInvocation.InvocationName) Get-MgOrganization"
+        }
+    }
+
+    End {
+        Write-Verbose "[$($MyInvocation.InvocationName)] Entra ID security audit complete."
+    }
 }
+
+#endregion 3. Orchestrator: Entra ID security audit
+
+#####################
+#region Main
+#####################
+
 Get-EntraSecuritySettings
+Disconnect-MgGraph
+
+#endregion Main
 
 #################################################################################
 #Function to check MFA status for users.  With options to Check MFA status for a user, Check MFA status for all users, Get any users not in an MFA enforced group if using Conditional Access Policies

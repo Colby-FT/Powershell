@@ -16,7 +16,7 @@ function Get-AutoRunItems {
     Path to export the auto-run results to a CSV file.
 
     .EXAMPLE
-    Get-AutoRunItems -ExportCsvPath "C:\AutoRunReport.csv"
+    Get-AutoRunItems -ExportCsvPath "C:\FT\AutoRunReport.csv"
     Scans for auto-run entries and exports the results to a CSV file.
     #>
     [CmdletBinding()]

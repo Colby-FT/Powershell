@@ -191,7 +191,7 @@ dcdiag /a /c /fix
 
 ===================Check initial replication status===================
 # Define source and new DC names
-$SourceDC = "shvusdc001"   # Replace with an existing DC
+$SourceDC = "GCNVRPAROOT"   # Replace with an existing DC
 $NewDC    = $env:COMPUTERNAME  # Current DC
 
 Write-Host "Checking SYSVOL and NTDS replication status on $NewDC..." -ForegroundColor Cyan
